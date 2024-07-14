@@ -1,2 +1,7 @@
-streamlit
 plotly=5.22
+keras
+matplotlib
+scikit-learn
+streamlit
+tensorflow
+tensorflow-probability
