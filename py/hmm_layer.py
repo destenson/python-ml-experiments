@@ -1,6 +1,7 @@
 import tensorflow as tf
 import tensorflow_probability as tfp
 
+import tensorflow.keras.models
 from tensorflow.keras.models import Sequential, Model
 from tensorflow.keras.layers import Layer
 from tensorflow.keras.layers import Dense, Input, ConvLSTM1D, Convolution1D
@@ -12,7 +13,19 @@ from tensorflow.keras.layers import Conv2D, MaxPooling2D, AveragePooling2D
 from tensorflow.keras.layers import Conv3D, MaxPooling3D, AveragePooling3D
 from tensorflow.keras.optimizers import Adam
 
-@tensorflow.keras.saving.register_keras_serializable(package="HMMLayers")
+import numpy as np
+import keras
+
+# print(tf.__version__)
+# keras.saving.get_custom_objects().clear()
+
+def get_custom_objects():
+    return {
+        "HMMNeuronLayer": HMMNeuronLayer,
+        "Custom>HMMNeuronLayer": HMMNeuronLayer,
+    }
+
+@keras.utils.register_keras_serializable(package="HMMLayers")
 class HMMNeuronLayer(Layer):
     def __init__(self, units, num_hmm_states, hmm_params=None, **kwargs):
         super(HMMNeuronLayer, self).__init__(**kwargs)
@@ -69,10 +82,10 @@ class HMMNeuronLayer(Layer):
         return cls(**config)
 
 
-def test_hmm_neuron_layer():
-    # Create an instance of HMMNeuronLayer
-    hmm_neuron_layer = HMMNeuronLayer(units=1, num_hmm_states=5)
-    print(hmm_neuron_layer)
-    print(hmm_neuron_layer(tf.random.normal((2, 2, 2))))
+# def test_hmm_neuron_layer():
+#     # Create an instance of HMMNeuronLayer
+#     hmm_neuron_layer = HMMNeuronLayer(units=1, num_hmm_states=5)
+#     print(hmm_neuron_layer)
+#     print(hmm_neuron_layer(tf.random.normal((2, 2, 2))))
 
-test_hmm_neuron_layer()
+# test_hmm_neuron_layer()
