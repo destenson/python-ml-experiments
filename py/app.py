@@ -90,20 +90,23 @@ st.subheader('Model Summary')
 model.summary(print_fn=lambda x: st.text(x))
 
 # File uploader for Keras model
-uploaded_file = st.file_uploader("Upload a Keras (.h5) model", type="h5")
+uploaded_file = st.file_uploader("Upload a Keras (.keras or .h5) model", type=["keras", "h5"])
 
 if uploaded_file is not None:
     # Load the model
-    model = load_model(uploaded_file)
-    
-    # Visualize the model
-    fig = visualize_network(model)
-    
-    # Display the plot
-    st.plotly_chart(fig, use_container_width=True)
-    
-    # Display model summary
-    st.subheader('Model Summary')
-    model.summary(print_fn=lambda x: st.text(x))
+    try:
+        model = load_model(uploaded_file)
+        
+        # Visualize the model
+        fig = visualize_network(model)
+        
+        # Display the plot
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Display model summary
+        st.subheader('Model Summary')
+        model.summary(print_fn=lambda x: st.text(x))
+    except Exception as e:
+        st.error(f"Error loading model: {e}")
 else:
-    st.write("Please upload a Keras (.h5) model file to visualize.")
+    st.write("Please upload a Keras (.keras or .h5) model file to visualize.")
