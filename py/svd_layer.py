@@ -1,8 +1,15 @@
 
 import tensorflow as tf
-import tensorflow.keras as keras
+# import tensorflow.keras as keras
 import numpy as np
 import math
+import keras
+
+def get_custom_objects():
+    return {
+        "UniqueNonZero": UniqueNonZero,
+        "SVDLayer": SVDLayer,
+    }
 
 @keras.utils.register_keras_serializable()
 class UniqueNonZero(tf.keras.constraints.Constraint):
