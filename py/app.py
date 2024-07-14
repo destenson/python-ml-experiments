@@ -1,8 +1,8 @@
-
 import streamlit as st
 import tensorflow as tf
 import numpy as np
 import plotly.graph_objects as go
+from tensorflow.keras.models import load_model
 
 # Function to create a simple neural network
 def create_model():
@@ -88,3 +88,22 @@ st.plotly_chart(fig, use_container_width=True)
 # Display model summary
 st.subheader('Model Summary')
 model.summary(print_fn=lambda x: st.text(x))
+
+# File uploader for Keras model
+uploaded_file = st.file_uploader("Upload a Keras (.h5) model", type="h5")
+
+if uploaded_file is not None:
+    # Load the model
+    model = load_model(uploaded_file)
+    
+    # Visualize the model
+    fig = visualize_network(model)
+    
+    # Display the plot
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Display model summary
+    st.subheader('Model Summary')
+    model.summary(print_fn=lambda x: st.text(x))
+else:
+    st.write("Please upload a Keras (.h5) model file to visualize.")
