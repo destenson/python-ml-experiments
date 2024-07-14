@@ -49,7 +49,7 @@ class HMMNeuronLayer(Layer):
         if self.hmm is None:
             transitions = tfp.distributions.Categorical(
                 probs=self.hmm_params[0])
-            
+
             batch_size = tf.shape(inputs)[0]
 
             # create a normal distribution with batch shape of transitions
@@ -71,15 +71,28 @@ class HMMNeuronLayer(Layer):
         return hmm_output
 
     def get_config(self):
-        base_config = super().get_config()
-        config = {
+        config = super().get_config()
+        config.update({
+            "units": self.units,
+            "num_hmm_states": self.num_hmm_states,
             "hmm_params": self.hmm_params.numpy(),
-        }
-        return {**base_config, **config}
+        })
+        return config
 
     @classmethod
     def from_config(cls, config):
-        return cls(**config)
+        self = cls(**config)
+        self.hmm_params = tf.Variable(config["hmm_params"])
+        return self
+
+    # def compute_output_shape(self, input_shape):
+    #     # TODO: verify this is correct
+    #     return (input_shape[0], self.output_dim)
+
+    @tf.function(input_signature=[tf.TensorSpec(shape=None, dtype=tf.float32)])
+    def call_and_return_dict(self, inputs):
+        return {"output": self.call(inputs)}
+
 
 
 # def test_hmm_neuron_layer():
