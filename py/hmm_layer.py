@@ -95,10 +95,40 @@ class HMMNeuronLayer(Layer):
 
 
 
-# def test_hmm_neuron_layer():
-#     # Create an instance of HMMNeuronLayer
-#     hmm_neuron_layer = HMMNeuronLayer(units=1, num_hmm_states=5)
-#     print(hmm_neuron_layer)
-#     print(hmm_neuron_layer(tf.random.normal((2, 2, 2))))
+def test_hmm_neuron_layer():
+    # Create an instance of HMMNeuronLayer
+    hmm_neuron_layer = HMMNeuronLayer(units=1, num_hmm_states=5)
+    print(hmm_neuron_layer)
+    print(hmm_neuron_layer(tf.random.normal((2, 2, 2))))
 
-# test_hmm_neuron_layer()
+test_hmm_neuron_layer()
+
+
+input_dim = 28
+output_dim = 10
+
+input_shape = (28, input_dim,1)
+
+# tf.debugging.disable_traceback_filtering()
+model = Sequential([
+    Input(shape=input_shape),
+    Conv2D(32, 3, activation='relu'),
+    # MaxPooling2D((2, 2)),
+    # Conv2D(64, (3, 3), activation='relu'),
+    # MaxPooling2D((2, 2)),
+    # Flatten(),
+    # Dense(8, activation='relu'),
+    HMMNeuronLayer(num_hmm_states=4, units=1),
+    # Dense(8, activation='relu'),
+    Dense(output_dim, activation='softmax')
+])
+model.summary(expand_nested=True, show_trainable=True)
+compile_kwargs = {
+    'optimizer': Adam(learning_rate=0.001),
+    'loss': 'sparse_categorical_crossentropy',
+    'metrics': ['accuracy']
+}
+model.compile(**compile_kwargs)
+# model.save("model-666.h5")
+
+
