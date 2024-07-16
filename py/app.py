@@ -47,7 +47,7 @@ def create_custom_model(input_shape, hidden_layers=2):
 
 
 # Function to create 3D visualization of the network
-def visualize_network(model):
+def visualize_network(model, name):
     layers = [
         layer for layer in model.layers if isinstance(layer, tf.keras.layers.Dense)
     ]
@@ -91,7 +91,7 @@ def visualize_network(model):
 
     # Create the layout
     layout = go.Layout(
-        title='3D Neural Network Visualization',
+        title=f'3D Neural Network Visualization of {name}',
         scene=dict(
             xaxis=dict(title='Layer'),
             yaxis=dict(title='Node'),
@@ -114,7 +114,7 @@ st.title('Neural Network Visualizer')
 model = create_simple_model()
 
 # Visualize the model
-fig = visualize_network(model)
+fig = visualize_network(model, 'a simple model')
 
 # Display the plot
 st.plotly_chart(fig, use_container_width=True)
@@ -125,42 +125,32 @@ model.summary(print_fn=st.text)
 
 #  custom_objects={"CustomLayer": CustomLayer, "custom_fn": custom_fn}
  
-def load_model_file(path):
-    try:
-        # Pass the custom objects dictionary to a custom object scope and place
-        # the `keras.models.load_model()` call within the scope.
-        custom_objects = {}
-        custom_objects.update(gcp_py.get_custom_objects())
-        custom_objects.update(hmm_layer_py.get_custom_objects())
-        custom_objects.update(losses_py.get_custom_objects())
-        custom_objects.update(svd_layer_py.get_custom_objects())
+def load_model_file(path, name=None):
+    # Pass the custom objects dictionary to a custom object scope and place
+    # the `keras.models.load_model()` call within the scope.
+    custom_objects = {}
+    custom_objects.update(gcp_py.get_custom_objects())
+    custom_objects.update(hmm_layer_py.get_custom_objects())
+    custom_objects.update(losses_py.get_custom_objects())
+    custom_objects.update(svd_layer_py.get_custom_objects())
 
-        with keras.saving.custom_object_scope(custom_objects):
-            model = keras.models.load_model(path)
+    with keras.saving.custom_object_scope(custom_objects):
+        model = keras.models.load_model(path)
 
-        # Visualize the model
-        fig = visualize_network(model)
-        
-        # Display the plot
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Display model summary
-        st.subheader('Model Summary')
-        model.summary(print_fn=st.text)
-        return model
-    # except ImportError as e:
-    #     st.error(f"Error loading model: {e}. This might be due to a version mismatch between the model and the installed Keras version.")
-    # except Exception as e:
-    #     st.error(f"Error loading model: {e}")
-    # except:
-    #     st.error(f"Error loading model (unknown reason)")
-    finally:
-        # Clean up the temporary file
-        os.remove(temp_file_path)
+    # Visualize the model
+    fig = visualize_network(model, path if not name else name)
+    
+    # Display the plot
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Display model summary
+    st.subheader('Model Summary')
+    model.summary(print_fn=st.text)
+    return model
 
  
 # List of sample models
-model_files = ["None","model1.keras", "model2.keras", "model3.h5"]  # Add your model file names here
+model_files = ["None","rcnn.h5","rcnn.keras","model1.keras", "model2.keras", "model3.h5"]  # Add your model file names here
 
 # Dropdown menu to select a model
 selected_model = st.selectbox("Select a model to visualize", model_files)
@@ -182,6 +172,16 @@ if uploaded_file is not None:
         temp_file.write(uploaded_file.read())
         temp_file_path = temp_file.name
 
-    model = load_model_file(temp_file_path)
+    try:
+        model = load_model_file(temp_file_path, uploaded_file.name)
+    # except ImportError as e:
+    #     st.error(f"Error loading model: {e}. This might be due to a version mismatch between the model and the installed Keras version.")
+    # except Exception as e:
+    #     st.error(f"Error loading model: {e}")
+    # except:
+    #     st.error(f"Error loading model (unknown reason)")
+    finally:
+        # Clean up the temporary file
+        os.remove(temp_file_path)
 else:
     st.write("Please upload a Keras (.keras or .h5) model file to visualize.")
