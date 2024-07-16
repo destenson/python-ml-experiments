@@ -100,6 +100,7 @@ def get_custom_objects():
     return {
         "count_errors": count_errors,
         "binary_crossentropy_first_n_columns": binary_crossentropy_first_n_columns(10),
+        "real_loss": binary_crossentropy_first_n_columns(10),
         "mnist_loss": mnist_loss,
         "combined_loss": combined_loss,
     }
