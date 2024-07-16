@@ -1,15 +1,21 @@
 import tensorflow as tf
+from tensorflow.keras.layers import Dense, Input
+from tensorflow.keras.models import Model
+
 import numpy as np
 import math
 import keras
 
 
+def create_lagrangian_network(input_shape):
+    inputs = Input(shape=input_shape)
+    x = Dense(64, activation='relu')(inputs)
+    x = Dense(64, activation='relu')(x)
+    output = Dense(1)(x)
+    return Model(inputs, output)
 
-def lagrangian_network(inputs):
-    x = tf.keras.layers.Dense(64, activation='relu')(inputs)
-    x = tf.keras.layers.Dense(64, activation='relu')(x)
-    return tf.keras.layers.Dense(1)(x)
-
+input_shape = (2,)  # Assuming input is [price, price_derivative]
+lagrangian_model = create_lagrangian_network(input_shape)
 
 @tf.function
 def euler_lagrange(model, q, q_dot):
@@ -33,11 +39,7 @@ def euler_lagrange(model, q, q_dot):
 class LNN(tf.keras.Model):
     def __init__(self):
         super(LNN, self).__init__()
-        self.lagrangian = tf.keras.Sequential([
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dense(64, activation='relu'),
-            tf.keras.layers.Dense(1)
-        ])
+        self.lagrangian = create_lagrangian_network(input_shape)
     
     def call(self, inputs):
         q, q_dot = tf.split(inputs, 2, axis=-1)
@@ -57,7 +59,7 @@ def train_a_model(num_epochs, dataset):
         optimizer.apply_gradients(zip(gradients, model.trainable_variables))
         return loss
 
-    # Training loop
+    # Assuming `dataset` is a tf.data.Dataset object with (q, q_dot, targets) tuples
     for epoch in range(num_epochs):
         for q_batch, q_dot_batch, target_batch in dataset:
             loss = train_step(q_batch, q_dot_batch, target_batch)
@@ -73,10 +75,14 @@ def predict_trajectory(model, initial_state, steps, dt=None):
     for _ in range(steps):
         acceleration = model(state)
         # Update state using simple Euler integration
-        new_q = state[:, :2] + state[:, 2:] * dt
-        new_q_dot = state[:, 2:] + acceleration * dt
+        new_q = state[:, :1] + state[:, 1:] * dt
+        new_q_dot = state[:, 1:] + acceleration * dt
         state = tf.concat([new_q, new_q_dot], axis=-1)
         trajectory.append(state)
     return tf.stack(trajectory)
+
+# Example usage
+initial_state = tf.constant([[100.0, 1.0]])  # Example initial state [price, price_derivative]
+predicted_trajectory = predict_trajectory(model, initial_state, steps=100, dt=0.01)
 
 
