@@ -121,47 +121,105 @@ def train_step(inputs):
     optimizer.apply_gradients(zip(gradients, vae.trainable_variables))
     return loss
 
+
+batch_size = 32
+num_epochs = 1000
+
+for dataset in data:
+    print(f"dataset.shape: {dataset.shape}")
+    dataset = dataset.dropna(inplace=False, axis=0)
+    print(f"dataset.shape: {dataset.shape}")
+    # Training loop
+    for epoch in range(num_epochs):
+        if epoch % 31 == 0:
+            print(f"Epoch {epoch} beginning")
+            print(f"Using dataset: {dataset}")
+        for batch in dataset.values:
+            # print(f"batch: {batch}")
+            loss = train_step(batch.reshape(-1, 2))
+        if epoch % 31 == 0:
+            print(f"Epoch {epoch}, Loss: {loss.numpy()}")
+
+print(f"dataset: {data[0]}")
 # Training loop
-for epoch in range(num_epochs):
-    for batch in dataset:
-        loss = train_step(batch)
-    print(f"Epoch {epoch}, Loss: {loss.numpy()}")
+loss_history = []
+k=0
+for d in data:
+    d = tf.convert_to_tensor(d.dropna(inplace=False))
+    batch_count = len(d) // batch_size
+    rem = len(d) % batch_size
+
+    ticker_loss_history = []
+    print(f"Training")
+    print(f"Using data: {d}")
+    for epoch in range(num_epochs):
+        epoch_loss_history = []
+        if epoch % 31 == 0:
+            print(f"Epoch {epoch+1} beginning")
+        if epoch == num_epochs-1:
+            print("Last epoch beginning")
+        # split d into batch_size batches
+        losses = []
+        for n in range(batch_count):
+            batch = d[n * batch_size:(n + 1) * batch_size]
+            loss = train_step(batch)
+            losses.append(np.dot(loss, loss))
+            epoch_loss_history.append(loss)
+        rms = np.sqrt(np.mean(losses))
+
+        ticker_loss_history.append(epoch_loss_history)
+
+        if epoch % 31 == 0 or epoch == num_epochs-1:
+            print(f"Epoch {epoch+1}, RMS Loss: {rms:.4}")
+            # print(f"d[3000:+1]      = {d.iloc[3000:3001]}")
+            # reconstructed, z_mean, z_log_var = vae(d.iloc[3000:3001].values)
+            # print(f"vae(d[3000:+1]) = {reconstructed}, {z_mean}, {z_log_var}")
+            # print(f"d[3002]         = {d.iloc[3002]}")
+            # pt = predict_trajectory(vae, d[3000:3010], 10, .1)
+            # print(f"pt = {pt}")
+            # print(f"pt[0] = {pt[0]}")
+            # print(f"pt[1] = {pt[1]}")
+
+    loss_history.append(ticker_loss_history)
+    # %mkdir -p lnn
+    vae.save(f"lnn/vae-{k:02}-{epoch+1}.keras")
+    k = k+1
 
 
 
-class LNN_VAE(tf.keras.Model):
-    def __init__(self, vae, lnn):
-        super(LNN_VAE, self).__init__()
-        self.vae = vae
-        self.lnn = lnn
+# class LNN_VAE(tf.keras.Model):
+#     def __init__(self, vae, lnn):
+#         super(LNN_VAE, self).__init__()
+#         self.vae = vae
+#         self.lnn = lnn
     
-    def call(self, inputs):
-        _, z_mean, _ = self.vae(inputs)
-        return self.lnn(z_mean)
+#     def call(self, inputs):
+#         _, z_mean, _ = self.vae(inputs)
+#         return self.lnn(z_mean)
 
-lnn_vae = LNN_VAE(vae, LNN())
+# lnn_vae = LNN_VAE(vae, LNN())
 
-# Training loop for LNN_VAE
-for epoch in range(num_epochs):
-    for batch in dataset:
-        loss = train_step(batch)
-    print(f"Epoch {epoch}, Loss: {loss.numpy()}")
+# # Training loop for LNN_VAE
+# for epoch in range(num_epochs):
+#     for batch in dataset:
+#         print(f"batch: {batch}")
+#         loss = train_step(batch)
+#     print(f"Epoch {epoch}, Loss: {loss.numpy()}")
 
 
-def predict_trajectory(model, initial_state, steps, dt=None):
-    trajectory = [initial_state]
-    state = initial_state
-    dt = 1/steps if dt is None else dt
-    for _ in range(steps):
-        acceleration = model(state)
-        # Update state using simple Euler integration
-        new_q = state[:, :1] + state[:, 1:] * dt
-        new_q_dot = state[:, 1:] + acceleration * dt
-        state = tf.concat([new_q, new_q_dot], axis=-1)
-        trajectory.append(state)
-    return tf.stack(trajectory)
+# def predict_trajectory(model, initial_state, steps, dt=None):
+#     trajectory = [initial_state]
+#     state = initial_state
+#     dt = 1./steps if dt is None else dt
+#     for _ in range(steps):
+#         acceleration = model(state)
+#         # Update state using simple Euler integration
+#         new_q = state[:, :1] + state[:, 1:] * dt
+#         new_q_dot = state[:, 1:] + acceleration * dt
+#         state = tf.concat([new_q, new_q_dot], axis=-1)
+#         trajectory.append(state.numpy())
+#     return np.stack(trajectory)
 
-# Example usage
-initial_state = tf.constant([[100.0, 1.0]])  # Example initial state [price, price_derivative]
-predicted_trajectory = predict_trajectory(model, initial_state, steps=100, dt=0.01)
-
+# # Example usage
+# initial_state = tf.constant([data[200:201]])  # Example initial state [price, price_derivative]
+# predicted_trajectory = predict_trajectory(model, initial_state, steps=100, dt=0.01)
