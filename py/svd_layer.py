@@ -5,12 +5,6 @@ import numpy as np
 import math
 import keras
 
-def get_custom_objects():
-    return {
-        "UniqueNonZero": UniqueNonZero,
-        "SVDLayer": SVDLayer,
-    }
-
 @keras.utils.register_keras_serializable()
 class UniqueNonZero(tf.keras.constraints.Constraint):
     def __init__(self, epsilon=1e-7):
@@ -165,7 +159,7 @@ class SVDLayer(keras.layers.Layer):
         S = self.S[:self.low_rank]
         V = self.V[:self.low_rank, :]
 
-        w = keras.ops.matmul(keras.ops.multiply(U, S), V)
+        w = keras.ops.matmul(keras.ops.multiply(U, S), V, transpose_b=True)
 
         result = keras.ops.add(keras.ops.matmul(inputs, w), self.b)
 
@@ -182,3 +176,9 @@ class SVDLayer(keras.layers.Layer):
     #     w = tf.keras.ops.matmul(tf.matmul(self.U, tf.linalg.diag(self.S)), self.V, transpose_b=True)
     #     s, u, v = tf.linalg.svd(w)
     #     return s, u, v
+
+def get_custom_objects():
+    return {
+        "UniqueNonZero": UniqueNonZero,
+        "SVDLayer": SVDLayer,
+    }
