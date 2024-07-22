@@ -1,6 +1,9 @@
 plotly==5.22
+jax==0.4.30
 keras
 matplotlib
+pymc=5.16.2
+scipy==1.13.1
 scikit-learn
 streamlit
 tensorflow==2.16.2
