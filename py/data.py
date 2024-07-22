@@ -12,7 +12,8 @@ def interesting_fred_symbols():
         ("M2SL", "Money supply, M2, seasonally adjusted ($B)"),
         ("USREC", "US recessions (1=recession, 0=expansion)"),
         ("MRTSSM4481USN", "US Retail Clothing Sales ($M)"),
-        
+        ("TTLCON", "Total Construction, not seasonally adjusted ($M)")
+        ("TTLCONS", "Total Construction, seasonally adjusted ($M)")
     ]
 
 # Load the data
@@ -58,3 +59,7 @@ ax.plot(res.smoothed_marginal_probabilities[0], label='Regime 1')
 ax.plot(res.smoothed_marginal_probabilities[1], label='Regime 2')
 ax.legend()
 plt.show()
+
+
+# tensorflow also has some data available
+
