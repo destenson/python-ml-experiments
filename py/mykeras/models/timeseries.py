@@ -1,7 +1,7 @@
 
 import numpy as np
 import pandas as pd
-# import tensorflow as tf
+import tensorflow as tf
 import pymc as pm
 from torch import tensor as tt
 import altair as alt
@@ -118,5 +118,37 @@ def test_models():
     # print(model.trace['seasonality'].quantile(0.975, axis=0))
     # return model
 
+class TimeSeriesTesting(tf.test.TestCase):
+    
+    # def test_something():
+    #     test_models()
+        
+    def test_yf_aapl(self):
+        from ..datasets.yf import get_ticker_data
+        data = get_ticker_data('AAPL', verbose=1)
+        
+        pd.read_pickle
+
+        # Check if df is a numpy array and ensure it is 2-dimensional
+        if isinstance(data, np.ndarray):
+            if data.ndim == 2:
+                df = pd.DataFrame(data)
+            else:
+                print(f"Unexpected shape of numpy array: {df.shape}")
+                raise ValueError("Expected 2-dimensional array")
+        
+        # Print the columns of the dataframe
+        print("Columns in df:", df.columns)
+        
+        # Print the first few rows of the dataframe
+        print("First few rows of df:\n", df.head())
+        
+        # Attempt to print the 'symbol' column if it exists
+        if 'symbol' in df.columns:
+            print(df['symbol'])
+        else:
+            print("Column 'symbol' does not exist in df")
+
 if __name__ == '__main__':
-    test_models()
+    tf.test.main()
+    # test_models()
