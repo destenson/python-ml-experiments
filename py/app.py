@@ -19,13 +19,13 @@ import os
 import io
 import tempfile
 
-import gcp as gcp_py
-import hmm_layer as hmm_layer_py
+import py.mykeras.layers.gcp as gcp_py
+import py.mykeras.layers.hmm as hmm_layer_py
 import losses as losses_py
-import svd_layer as svd_layer_py
+import py.mykeras.layers.svdlayer as svd_layer_py
 
-from svd_layer import SVDLayer, UniqueNonZero
-from hmm_layer import HMMNeuronLayer
+from py.mykeras.layers.svdlayer import SVDLayer, UniqueNonZero
+from py.mykeras.layers.hmm import HMMNeuronLayer
 
 # @st.cache_data
 # Function to create a simple neural network

@@ -1,32 +1,15 @@
 
+from py.mykeras.constraints.uniquenonzero import UniqueNonZero
+
 import tensorflow as tf
 # import tensorflow.keras as keras
 import numpy as np
 import math
 import keras
+# from py.mykeras.constraints.uniquenonzero import UniqueNonZero
 
-@keras.utils.register_keras_serializable()
-class UniqueNonZero(tf.keras.constraints.Constraint):
-    def __init__(self, epsilon=1e-7):
-        super(UniqueNonZero, self).__init__()
-        self.epsilon = epsilon
 
-    def __call__(self, w):
-        # Ensure values are positive and non-zero (add a small epsilon)
-        w_non_zero = tf.abs(w) + self.epsilon
 
-        # Make values unique by adding a small increment to duplicates
-        w_unique = tf.nn.relu(w_non_zero - tf.reduce_min(w_non_zero, axis=-1, keepdims=True))
-        w_unique += tf.cast(tf.range(tf.shape(w_unique)[-1]), w_unique.dtype) * self.epsilon
-
-        return w_unique
-
-    def get_config(self):
-        config = super(UniqueNonZero, self).get_config()
-        config.update({
-            "epsilon": self.epsilon
-        })
-        return config
 
 
 @keras.utils.register_keras_serializable()
@@ -51,7 +34,7 @@ class SVDLayer(keras.layers.Layer):
                  b_regularizer=None, b_initializer=None,
                  seed=None,
                  **kwargs):
-        super(SVDLayer, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         if output_dim is None:
             # TODO: allow automatically configuring the output dimension
             raise ValueError("output_dim must be specified")
@@ -171,6 +154,16 @@ class SVDLayer(keras.layers.Layer):
         return self.activation(result)
 
 
+def make_svd_layer_from_dense_layer(dense_layer, rank=None, low_rank=None, verbose=True):
+    weights, biases = dense_layer.get_weights()
+    input_dim, output_dim = weights.shape
+    s, u, v = tf.linalg.svd(weights)
+    svd_layer = SVDLayer(output_dim, rank=rank, low_rank=low_rank)
+    assert input_dim == 576
+    svd_layer.build((input_dim,))
+    svd_layer.set_weights([u[:,:rank],s[:rank],v[:rank,:],biases])
+    print(f"make_svd_layer_from_dense_layer: dense_layer={dense_layer}, svd_layer={svd_layer}") if verbose > 0 else None
+    return svd_layer
 
     # def perform_svd(self):
     #     w = tf.keras.ops.matmul(tf.matmul(self.U, tf.linalg.diag(self.S)), self.V, transpose_b=True)
@@ -179,6 +172,71 @@ class SVDLayer(keras.layers.Layer):
 
 def get_custom_objects():
     return {
-        "UniqueNonZero": UniqueNonZero,
         "SVDLayer": SVDLayer,
     }
+
+class SvdLayerTests(tf.test.TestCase):
+    def test_simple_svd_layer(self):
+        svdlayer = SVDLayer(10, rank=5, low_rank=3)
+        svdlayer.build((10,))
+        self.assertEqual(svdlayer.output_dim, 10)
+        self.assertEqual(svdlayer.rank, 5)
+        self.assertEqual(svdlayer.low_rank, 3)
+
+        self.assertEqual(svdlayer.U.shape, (10, 5))
+        self.assertEqual(svdlayer.S.shape, (5,))
+        self.assertEqual(svdlayer.V.shape, (5, 10))
+
+        # self.assertAlmostEqual(svdlayer.s_initializer, tf.keras.initializers.Ones())
+        # self.assertEqual(svdlayer.u_initializer, tf.keras.initializers.Orthogonal())
+        # self.assertEqual(svdlayer.v_initializer, tf.keras.initializers.Orthogonal())
+        # self.assertEqual(svdlayer.b_initializer, tf.keras.initializers.Zeros())
+
+        self.assertIsNone(svdlayer.s_regularizer)
+        self.assertIsNotNone(svdlayer.u_regularizer)
+        self.assertIsNotNone(svdlayer.v_regularizer)
+        self.assertIsNone(svdlayer.b_regularizer)
+        self.assertEqual(svdlayer.activation, tf.keras.activations.relu)
+        self.assertIsNone(svdlayer.seed)
+        self.assertEqual(svdlayer.compute_output_shape((None, 10)), (None, 10))
+        
+    def test_copy_from_dense(self):
+        from py.mykeras.datasets.mnist import load_mnist_cnn
+        model = load_mnist_cnn('cnn-functional-99.3.keras')
+        dense_layer = model.layers[-1]
+        # dense_layer.build((10,))
+        svdlayer = make_svd_layer_from_dense_layer(dense_layer, rank=5, low_rank=3)
+        svdlayer.build((576,))
+        self.assertEqual(svdlayer.output_dim, 10)
+        self.assertEqual(svdlayer.rank, 5)
+        self.assertEqual(svdlayer.low_rank, 3)
+
+        self.assertEqual(svdlayer.U.shape, (576, 5))
+        self.assertEqual(svdlayer.S.shape, (5,))
+        self.assertEqual(svdlayer.V.shape, (5, 10))
+
+        # self.assertEqual(svdlayer.s_initializer, tf.keras.initializers.Ones())
+        # self.assertEqual(svdlayer.u_initializer, tf.keras.initializers.Orthogonal())
+        # self.assertEqual(svdlayer.v_initializer, tf.keras.initializers.Orthogonal())
+        # self.assertEqual(svdlayer.b_initializer, tf.keras.initializers.Zeros())
+
+        self.assertIsNone(svdlayer.s_regularizer)
+        self.assertIsNotNone(svdlayer.u_regularizer)
+        self.assertIsNotNone(svdlayer.v_regularizer)
+        self.assertIsNone(svdlayer.b_regularizer)
+        self.assertEqual(svdlayer.activation, tf.keras.activations.relu)
+        self.assertIsNone(svdlayer.seed)
+        self.assertEqual(svdlayer.compute_output_shape((None, 10)), (None, 10))
+
+        weights, biases = dense_layer.get_weights()
+        svd_weights = svdlayer.get_weights()
+        svd_biases = svd_weights[-1]
+        svd_weights = (svd_weights[0] @ svd_weights[1]) @ svd_weights[2].transpose()
+        self.assertAllClose(weights, svd_weights)
+        self.assertAllClose(biases, svd_biases)
+
+# svdlayer = make_svd_layer_from_dense_layer(keras.layers.Dense(10), rank=5, low_rank=3)
+# print(f"{svdlayer}")
+
+if __name__ == "__main__":
+    tf.test.main()

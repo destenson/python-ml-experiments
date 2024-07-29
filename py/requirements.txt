@@ -1,10 +1,15 @@
-plotly==5.22
+# keras
 jax==0.4.30
-keras
 matplotlib
-pymc=5.16.2
-scipy==1.13.1
+pandas
+pandas_datareader==0.10.0
+plotly==5.22
+pydot==3.0.1
+pymc==5.16.2
 scikit-learn
+scipy==1.13.1
+statsmodels==0.14.2
 streamlit
 tensorflow==2.16.2
 tensorflow-probability[tf]
+# tf-models-official==2.16.0

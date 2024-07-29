@@ -3,6 +3,12 @@ import tensorflow_probability as tfp
 import tensorflow as tf
 import numpy as np
 
+def get_custom_objects():
+    return {
+        "MyKeras>EntropyRegularizer": EntropyRegularizer,
+    }
+
+@tf.keras.utils.register_keras_serializable(package="MyKeras")
 class EntropyRegularizer(tf.keras.regularizers.Regularizer):
     def __call__(self, x):
         probabilities = EntropyRegularizer.normalize_weights(x.numpy())
@@ -12,13 +18,13 @@ class EntropyRegularizer(tf.keras.regularizers.Regularizer):
     def get_config(self):
         return {}
 
-    @ staticmethod
+    @staticmethod
     def normalize_weights(weights):
         exp_weights = np.exp(weights - np.max(weights))  # For numerical stability
         probabilities = exp_weights / np.sum(exp_weights)
         return probabilities
 
-    @ staticmethod
+    @staticmethod
     def calculate_entropy(probabilities):
         entropy = -np.sum(probabilities * np.log(probabilities + 1e-10))  # Adding small value to avoid log(0)
         return entropy
@@ -27,7 +33,7 @@ class EntropyRegularizer(tf.keras.regularizers.Regularizer):
 class TestEntropyRegularizer(tf.test.TestCase):
     
     def setUp(self):
-        super(TestEntropyRegularizer, self).setUp()
+        super().setUp()
         self.regularizer = EntropyRegularizer()
 
     def test_normalize_weights(self):

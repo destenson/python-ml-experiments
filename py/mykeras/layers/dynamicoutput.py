@@ -10,17 +10,16 @@ def get_custom_objects():
 class DynamicOutputLayer(tf.keras.layers.Layer):
     def __init__(self, n=64, initial_classes=10,
                  kernel_initializer='random_normal', bias_initializer='zeros',
-                 kernel_regularizer=None, bias_regularizer=None,
-                 weights=None, biases=None, **kwargs):
+                 kernel_regularizer=None, bias_regularizer=None, **kwargs):
         super(DynamicOutputLayer, self).__init__(**kwargs)
         self.n = n
         self.initial_classes = initial_classes
-        self.W = weights
-        self.b = biases
         self.kernel_initializer = tf.keras.initializers.get(kernel_initializer)
         self.bias_initializer = tf.keras.initializers.get(bias_initializer)
         self.kernel_regularizer = tf.keras.regularizers.get(kernel_regularizer)
         self.bias_regularizer = tf.keras.regularizers.get(bias_regularizer)
+        self.W = None
+        self.b = None
     
     def build(self, input_shape):
         n = self.n
@@ -59,8 +58,8 @@ class DynamicOutputLayer(tf.keras.layers.Layer):
         self.bias_regularizer = tf.keras.regularizers.deserialize(config["bias_regularizer"])
         return self
     
-    def compute_output_shape(self, input_shape):
-        return (input_shape[0], self.W.shape[1])
+    # def compute_output_shape(self, input_shape):
+    #     return (input_shape[0], self.W.shape[1])
 
     def add_class(self):
         new_W = tf.Variable(initial_value=tf.random.normal([self.W.shape[0], 1]), trainable=True)
@@ -68,25 +67,31 @@ class DynamicOutputLayer(tf.keras.layers.Layer):
         new_b = tf.Variable(initial_value=tf.zeros([1]), trainable=True)
         self.b = tf.concat([self.b, new_b], axis=0)
 
+    # @tf.function(reduce_retracing=True)
     def call(self, inputs):
         input = tf.reshape(inputs, [-1, self.W.shape[0]])
         # print(f"inputs.shape={inputs.shape}, input.shape={input.shape}, W.shape={self.W.shape}, b.shape={self.b.shape}")
         return tf.matmul(input, self.W) + self.b
 
 
-def build_dynamic_model(input_shape=(28, 28, 1)):
+def build_dynamic_model(input_shape=(28, 28, 1), n=10, initial_classes=5):
     inputs = tf.keras.layers.Input(shape=input_shape)
     x = tf.keras.layers.Conv2D(32, (3, 3), activation='relu')(inputs)
     x = tf.keras.layers.MaxPooling2D((2, 2))(x)
     x = tf.keras.layers.Conv2D(64, (3, 3), activation='relu')(x)
     x = tf.keras.layers.MaxPooling2D((2, 2))(x)
     x = tf.keras.layers.Conv2D(64, (3, 3), activation='relu')(x)
+    x = tf.keras.layers.MaxPooling2D((2, 2))(x)
+    x = tf.keras.layers.Conv2D(16, (3, 3), activation='relu')(x)
+    x = tf.keras.layers.MaxPooling2D((2, 2))(x)
+    x = tf.keras.layers.Conv2D(4, (3, 3), activation='relu')(x)
+    x = tf.keras.layers.MaxPooling2D((2, 2))(x)
     x = tf.keras.layers.Flatten()(x)
-    x = tf.keras.layers.Dense(64, activation='relu')(x)
-    outputs = DynamicOutputLayer()(x)
+    x = tf.keras.layers.Dense(n*2, activation='relu')(x)
+    outputs = DynamicOutputLayer(n=n, initial_classes=initial_classes)(x)
     
     model = tf.keras.models.Model(inputs=inputs, outputs=outputs)
-    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy',
+    model.compile(optimizer='adam', loss='binary_crossentropy',
                   metrics=['accuracy',
                            tf.keras.metrics.AUC(name='auc'),
                            tf.keras.metrics.FalsePositives(name='fp'),
@@ -162,28 +167,61 @@ class DynamicOutputLayerTest(tf.test.TestCase):
             DynamicOutputLayer(n=16, initial_classes=5),
         ])
         model.compile(optimizer='adam', loss='mse')
-        model.summary()
+        # model.summary()
         model.fit(tf.random.normal([39, 16, 7]), tf.random.normal([39, 5]), epochs=1)
         model.evaluate(tf.random.normal([32, 16, 7]), tf.random.normal([32, 5]))
         model.predict(tf.random.normal([32, 16, 7]))
         model.save('test_model0.keras')
         model = tf.keras.models.load_model('test_model0.keras', custom_objects=get_custom_objects())
-        model.summary()
+        # model.summary()
         model.evaluate(tf.random.normal([15, 16, 7]), tf.random.normal([15, 5]))
         model.predict(tf.random.normal([15, 16, 7]))
 
-    # def test_build_dynamic_model(self):
-    #     model = build_dynamic_model((32, 64, 2))
-    #     model.summary()
-    #     model.fit(tf.random.normal([32, 64, 2]), tf.random.normal([32, 10]), epochs=1)
-    #     model.evaluate(tf.random.normal([32, 64, 2]), tf.random.normal([32, 10]))
-    #     model.predict(tf.random.normal([32, 64, 2]))
-    #     # model.save('test_model1.keras')
-    #     # model = tf.keras.models.load_model('test_model1.keras', custom_objects=get_custom_objects())
-    #     # model.summary()
-    #     # model.evaluate(tf.random.normal([32, 64]), tf.random.normal([32, 10]))
-    #     # model.predict(tf.random.normal([32, 64]))
+    def test_build_dynamic_model(self):
+        model = build_dynamic_model((1024, 768, 3), n=1, initial_classes=5)
+        # model.summary()
+        model.fit(tf.random.normal([2, 1024, 768, 3]), tf.random.normal([2, 5]), epochs=1)
+        model.evaluate(tf.random.normal([4, 1024, 768, 3]), tf.random.normal([4, 5]))
+        model.predict(tf.random.normal([1, 1024, 768, 3]))
+        model.save('test_model1.keras')
+        model = tf.keras.models.load_model('test_model1.keras', custom_objects=get_custom_objects())
+        # model.summary()
+        model.evaluate(tf.random.normal([1, 1024, 768, 3]), tf.random.normal([1, 5]))
+        model.predict(tf.random.normal([1, 1024, 768, 3]))
 
+    def test_build_dynamic_model1(self):
+        model = build_dynamic_model((1024, 768, 3), n=1, initial_classes=5)
+        initial_output = model.predict(tf.random.normal([1, 1024, 768, 3]))
+        self.assertEqual(initial_output.shape[1], 5)
+        
+        model.layers[-1].add_class()
+        model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+        
+        new_output = model.predict(tf.random.normal([1, 1024, 768, 3]))
+        self.assertEqual(new_output.shape[1], 6)
+
+    def test_build_dynamic_model2(self):
+        model = build_dynamic_model((1024, 768, 3), n=1, initial_classes=5)
+        model.summary()
+        model.fit(tf.random.normal([2, 1024, 768, 3]), tf.random.normal([2, 5]), epochs=1)
+        model.evaluate(tf.random.normal([4, 1024, 768, 3]), tf.random.normal([4, 5]))
+        model.predict(tf.random.normal([1, 1024, 768, 3]))
+
+        model.layers[-1].add_class()
+        model.compile(optimizer='adam', loss='binary_crossentropy',
+                    metrics=['accuracy',
+                            tf.keras.metrics.AUC(name='auc'),
+                            tf.keras.metrics.FalsePositives(name='fp'),
+                            tf.keras.metrics.TruePositives(name='tp'),
+                            tf.keras.metrics.FalseNegatives(name='fn'),
+                            tf.keras.metrics.TrueNegatives(name='tn'),
+                            tf.keras.metrics.Precision(name='prc'),
+                            tf.keras.metrics.Recall(name='rcl'),
+                            ])
+        model.summary()
+        model.fit(tf.random.normal([2, 1024, 768, 3]), tf.random.normal([2, 6]), epochs=1)
+        model.evaluate(tf.random.normal([1, 1024, 768, 3]), tf.random.normal([1, 6]))
+        model.predict(tf.random.normal([1, 1024, 768, 3]))
 
         
 if __name__ == '__main__':
