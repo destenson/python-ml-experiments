@@ -1,12 +1,163 @@
-
-import tensorflow as tf
-
-from tensorflow.keras.layers import Conv1D, Conv2D # type: ignore
-from tensorflow.keras.models import Model # type: ignore
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+
+import tensorflow as tf
+
+from tensorflow.keras.layers import Conv1D, Conv2D
+from tensorflow.keras.models import Model # type: ignore
+
+from scipy.ndimage import zoom
+
+import math
+
+def make_training_videos(model, training_data, path='videos/', resolution=(1920, 1080)):
+    '''
+    Create videos of the training process by grabbing the weights at each epoch
+    and plotting them as frames of the video. Also plot the loss values.
+    '''
+    from matplotlib.animation import FuncAnimation
+    import os
+    
+    os.makedirs(path, exist_ok=True)
+    model_name = model.name
+    path_pfx = f"{path}{model_name}"
+    # x_train, y_train, x_test, y_test = training_data
+
+    img_shape = [resolution[1], resolution[0]]
+
+    # start by figuring out the structure and layout of the model
+    layer_weights = {}
+    for layer in model.layers:
+        print(layer.name, layer.input, layer.output)
+        weights = np.zeros(img_shape)
+        if hasattr(layer, 'get_weights'):
+            layer_weights = layer.get_weights()
+            if layer_weights:
+                np.concatenate(weights, (np.concatenate([w.flatten() for w in layer_weights])))
+        layer_weights[layer.name] = weights
+    
+    # create a video for each layer
+    for layer_name, weights in layer_weights.items():
+        fig, ax = plt.subplots()
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        line, = ax.plot([], [], lw=2)
+        img = ax.imshow(np.zeros(img_shape), aspect='auto')
+
+        def init():
+            line.set_data([], [])
+            img.set_data(np.zeros(img_shape))
+            return line, img
+
+        def update(frame):
+            model.fit(training_data, epochs=1, batch_size=320)
+            weights = []
+            for layer in model.layers:
+                if hasattr(layer, 'get_weights'):
+                    layer_weights = layer.get_weights()
+                    if layer_weights:
+                        wts = [w.reshape(img_shape) for w in layer_weights]
+                        weights.append(np.concatenate(wts))
+
+            weights = np.concatenate(weights).reshape(img_shape)
+            img.set_data(weights)
+            y_pred = model.predict(training_data)
+            line.set_data(training_data, y_pred)
+            return line, img
+        
+        ani = FuncAnimation(fig, update, frames=range(100), init_func=init, blit=True)
+        ani.save(f"{path_pfx}_{layer_name}.mp4", fps=2)
+        
+
+def make_training_video(model, x_train, y_train, x_test, y_test, trainfn=None, filename='training.mp4'):
+    '''
+    Create a video of the training process by grabbing the weights at each epoch
+    and plotting them as an image. Also plot the loss values.
+    '''
+    from matplotlib.animation import FuncAnimation
+
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    line, = ax.plot([], [], lw=2)
+    img_shape = (1920, 1080)
+    img = ax.imshow(np.zeros(img_shape), aspect='auto')
+
+    def init():
+        line.set_data([], [])
+        img.set_data(np.zeros((1280, 1280)))
+        return line, img
+
+    def update(frame):
+        model.fit(x_train, y_train, epochs=1, batch_size=320, validation_data=(x_test, y_test))
+        weights = []
+        print("Updating frame: ", frame)
+        for layer in model.layers:
+            print("Updating layer: ", layer.name)
+            if hasattr(layer, 'get_weights'):
+                layer_weights = layer.get_weights()
+                if layer_weights:
+                    print("Layer weights len: ", len(layer_weights))
+
+                    rescaled_weights = []
+                    for w in layer_weights:
+                        if len(w.shape) == 4:
+                            print(f"weights shape: {w.shape}")
+                            print("drawing to subplot")
+                            weight_slice = w[:, :, 0, :]
+                            num_filters = weight_slice.shape[2]
+                            grid_size = int(np.ceil(np.sqrt(num_filters)))
+                            
+                            f, axes = plt.subplots(grid_size, grid_size, figsize=(20, 20))
+                            f.suptitle(layer.name)
+                            
+                            for i in range(num_filters):
+                                axis = axes[i // grid_size, i % grid_size]
+                                axis.imshow(weight_slice[:, :, i], cmap='viridis')
+                                axis.axis('off')
+                        elif len(w.shape) > 1:
+                            print(f"weights shape: {w.shape}")
+                            newy = max(img_shape[0], min(img_shape[0], w.shape[0]))
+                            newx = max(img_shape[1], min(img_shape[1], w.shape[1]))
+                            scale_factors = (
+                                img_shape[1] / newy, img_shape[0] / newx )
+                            print(f"zooming to shape: {scale_factors}")
+                            rescaled = zoom(w, scale_factors)
+                            print(f"weights shape now: {rescaled.shape}")
+                            rescaled_weights.append(rescaled)
+                        else:
+                            print(f"weights shape: {w.shape}")
+                            # newy = max(img_shape[0], min(img_shape[0], w.shape[0])) + 0.5
+                            scale_factor = img_shape[0]/w.shape[0]
+                            print(f"zoom factor: {scale_factor}")
+                            rescaled = zoom([w], scale_factor)
+                            print(f"weights shape now: {rescaled.shape}")
+                            rescaled_weights.append(rescaled)
+
+                    weights.append(rescaled_weights)
+                    # weights.append(np.concatenate([w.flatten() for w in layer_weights]))
+
+            print("Finished updating layer: ", layer.name)
+
+        print("Finished updating frame: ", frame)
+        # print the lengths of all the dimensions of weights
+        for i, w in enumerate(weights):
+            print(f"Layer {i} weights shape: {len(w)}")
+            for j, wj in enumerate(w):
+                print(f"Layer {i} weights {j} shape: {wj.shape}")
+        
+        df = pd.DataFrame(weights)
+        img.set_data(df)
+        # weights = np.concatenate(weights) #.reshape((1280, 1280))
+        # img.set_data(weights)
+        y_pred = model.predict(x_test)
+        line.set_data(y_test, y_pred)
+        return line, img
+    
+    ani = FuncAnimation(fig, update, frames=range(100), init_func=init, blit=True)
+    ani.save(filename, fps=2)
+
 
 def plot_loss_histogram(model, x):
     '''
@@ -17,7 +168,8 @@ def plot_loss_histogram(model, x):
     # Get train MAE loss.
     x_pred = model.predict(x)
     mae_loss = np.mean(tf.square(x_pred - x), axis=1)
-    print("MAE loss shape: ", mae_loss.shape)
+
+    # print("MAE loss shape: ", mae_loss.shape)
     if mae_loss.shape[-1] == 1:
         mae_loss = mae_loss.flatten()
 
@@ -196,13 +348,35 @@ def test_gradcam(model, img):
     plt.show()
 
 class VisualizationTests(tf.test.TestCase):
-    
-    def test_plot_loss_histogram(self):
-        model = tf.keras.models.load_model("models/autoencoder-mnist.keras")
+
+    def test_make_training_video(self):
+        model = tf.keras.models.load_model("models/rnn-mnist-97.8.keras")
         (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
         x_train = x_train.reshape((x_train.shape[0], 28, 28, 1)).astype('float32') / 255
-        # x_test = x_test #[:1000]
-        plot_loss_histogram(model, x_train)
+        x_test = x_test.reshape((x_test.shape[0], 28, 28, 1)).astype('float32') / 255
+        y_train = tf.keras.utils.to_categorical(y_train, 10)
+        y_test = tf.keras.utils.to_categorical(y_test, 10)
+        training_data = (x_train[:10], y_train[:10], x_test[:10], y_test[:10])
+        make_training_videos(model, training_data)
+    
+    # def test_make_training_video(self):
+    #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
+    #     (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    #     x_train = x_train.reshape((x_train.shape[0], 28, 28, 1)).astype('float32') / 255
+    #     x_test = x_test.reshape((x_test.shape[0], 28, 28, 1)).astype('float32') / 255
+    #     y_train = tf.keras.utils.to_categorical(y_train, 10)
+    #     y_test = tf.keras.utils.to_categorical(y_test, 10)
+    #     make_training_video(model, x_train[:10], y_train[:10], x_test[:10], y_test[:10])
+    
+    # def test_plot_loss_histogram(self):
+    #     model = tf.keras.models.load_model("models/autoencoder-mnist.keras")
+    #     (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    #     x_train = x_train.reshape((x_train.shape[0], 28, 28, 1)).astype('float32') / 255
+    #     x_test = x_test.reshape((x_test.shape[0], 28, 28, 1)).astype('float32') / 255
+    #     x_train = x_train[:1000]
+    #     x_test = x_test[:1000]
+    #     plot_loss_histogram(model, x_train)
+    #     plot_loss_histogram(model, x_test)
     
     # def test_plot_history_metrics(self):
     #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
