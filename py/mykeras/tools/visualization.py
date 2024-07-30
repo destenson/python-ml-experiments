@@ -6,6 +6,7 @@ from tensorflow.keras.models import Model # type: ignore
 
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 def plot_loss_histogram(model, x):
     '''
@@ -15,7 +16,10 @@ def plot_loss_histogram(model, x):
     '''
     # Get train MAE loss.
     x_pred = model.predict(x)
-    mae_loss = np.mean(np.abs(x_pred - x), axis=1)
+    mae_loss = np.mean(tf.square(x_pred - x), axis=1)
+    print("MAE loss shape: ", mae_loss.shape)
+    if mae_loss.shape[-1] == 1:
+        mae_loss = mae_loss.flatten()
 
     plt.hist(mae_loss, bins=50)
     plt.xlabel("MAE loss")
@@ -193,17 +197,24 @@ def test_gradcam(model, img):
 
 class VisualizationTests(tf.test.TestCase):
     
-    def test_plot_history_metrics(self):
-        model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
-        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
-        model.summary()
+    def test_plot_loss_histogram(self):
+        model = tf.keras.models.load_model("models/autoencoder-mnist.keras")
         (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
-        x_train = x_train.reshape(x_train.shape[0], 28, 28, 1).astype('float32') / 255
-        x_test = x_test.reshape(x_test.shape[0], 28, 28, 1).astype('float32') / 255
-        y_train = tf.keras.utils.to_categorical(y_train, 10)
-        y_test = tf.keras.utils.to_categorical(y_test, 10)
-        history = model.fit(x_train, y_train, epochs=5, batch_size=32, validation_data=(x_test, y_test))
-        plot_history_metrics(history)
+        x_train = x_train.reshape((x_train.shape[0], 28, 28, 1)).astype('float32') / 255
+        # x_test = x_test #[:1000]
+        plot_loss_histogram(model, x_train)
+    
+    # def test_plot_history_metrics(self):
+    #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
+    #     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    #     model.summary()
+    #     (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    #     x_train = x_train.reshape(x_train.shape[0], 28, 28, 1).astype('float32') / 255
+    #     x_test = x_test.reshape(x_test.shape[0], 28, 28, 1).astype('float32') / 255
+    #     y_train = tf.keras.utils.to_categorical(y_train, 10)
+    #     y_test = tf.keras.utils.to_categorical(y_test, 10)
+    #     history = model.fit(x_train, y_train, epochs=5, batch_size=32, validation_data=(x_test, y_test))
+    #     plot_history_metrics(history)
     
     # def test_print_basic_weight_statistics(self):
     #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
