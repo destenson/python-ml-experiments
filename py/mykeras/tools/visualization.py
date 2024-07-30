@@ -1,29 +1,73 @@
 
 import tensorflow as tf
 
-from tensorflow.keras.layers import Conv2D # type: ignore
+from tensorflow.keras.layers import Conv1D, Conv2D # type: ignore
 from tensorflow.keras.models import Model # type: ignore
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-def plot_convolutional_weights(weights, title):
-    weight_slice = weights[:, :, 0, :]
-    num_filters = weight_slice.shape[2]
-    grid_size = int(np.ceil(np.sqrt(num_filters)))
-    
-    fig, axes = plt.subplots(grid_size, grid_size, figsize=(20, 20))
-    fig.suptitle(title)
-    
-    for i in range(num_filters):
-        ax = axes[i // grid_size, i % grid_size]
-        ax.imshow(weight_slice[:, :, i], cmap='viridis')
-        ax.axis('off')
-    
+def plot_loss_histogram(model, x):
+    '''
+    Plot histogram of loss values for the given model and input data.
+    This is useful for determining a threshold for anomaly detection.
+    This is used with autoencoders.
+    '''
+    # Get train MAE loss.
+    x_pred = model.predict(x)
+    mae_loss = np.mean(np.abs(x_pred - x), axis=1)
+
+    plt.hist(mae_loss, bins=50)
+    plt.xlabel("MAE loss")
+    plt.ylabel("No of samples")
     plt.show()
 
+    # Get loss threshold.
+    threshold = np.max(mae_loss)
+    print("Error threshold: ", threshold)
+
+def plot_history_metrics(history: tf.keras.callbacks.History):
+    total_plots = len(history.history)
+    cols = total_plots // 2
+
+    rows = total_plots // cols
+
+    if total_plots % cols != 0:
+        rows += 1
+
+    pos = range(1, total_plots + 1)
+    plt.figure(figsize=(15, 10))
+    for i, (key, value) in enumerate(history.history.items()):
+        plt.subplot(rows, cols, pos[i])
+        plt.plot(range(len(value)), value)
+        plt.title(str(key))
+    plt.show()
+
+def plot_convolutional_weights(weights, title, two_d=True):
+    # if two_d:
+    if len(weights.shape) == 4:
+        weight_slice = weights[:, :, 0, :]
+        num_filters = weight_slice.shape[2]
+        grid_size = int(np.ceil(np.sqrt(num_filters)))
+        
+        fig, axes = plt.subplots(grid_size, grid_size, figsize=(20, 20))
+        fig.suptitle(title)
+        
+        for i in range(num_filters):
+            ax = axes[i // grid_size, i % grid_size]
+            ax.imshow(weight_slice[:, :, i], cmap='viridis')
+            ax.axis('off')
+        
+        plt.show()
+    else:
+        fig = plt.figure(figsize=(20, 5))
+        plt.plot(weights, marker='o', markersize=5)
+        plt.title(title)
+        plt.xlabel('Index')
+        plt.ylabel('Value')
+        plt.show()
+
 def print_basic_weight_statistics(model, show_conv=False):
-    n_conv = 0
     for layer in model.layers:
         if hasattr(layer, 'weights'):
             weights = layer.weights
@@ -34,22 +78,14 @@ def print_basic_weight_statistics(model, show_conv=False):
                 print(f"  Std: {weight.numpy().std()}")
                 print(f"  Min: {weight.numpy().min()}")
                 print(f"  Max: {weight.numpy().max()}")
-        if isinstance(layer, Conv2D):
-            n_conv += 1
+                if show_conv:
+                    if isinstance(layer, Conv2D):
+                        plot_convolutional_weights(weight, f"Filters of {layer.name}", two_d=True)
+                    elif isinstance(layer, Conv1D):
+                        plot_convolutional_weights(weight, f"Filters of {layer.name}", two_d=False)
     print(f"There were {len(model.layers)} layers in total.")
 
-    if show_conv:
-        print(f"Convolutional layer filters ({n_conv})")
-        for layer in model.layers:
-            if isinstance(layer, Conv2D):
-                weights = layer.get_weights()[0]
-                plot_convolutional_weights(weights, f"Filters of {layer.name}")
-
-import tensorflow as tf
-import numpy as np
-import matplotlib.pyplot as plt
-
-def visualize_activations(model, x_test):
+def visualize_activations(model, x_test, n=0):
     # Ensure the model is called with some data
     model.predict(x_test[0:1])
     
@@ -66,7 +102,7 @@ def visualize_activations(model, x_test):
     activation_model = tf.keras.Model(inputs=model.layers[0].input, outputs=layer_outputs)
 
     # Get activations for a single image
-    img = x_test[0:1]  # Select first test image
+    img = x_test[n:n+1]  # Select first test image
     activations = activation_model.predict(img)
 
     # Plot activations
@@ -122,8 +158,6 @@ def test_generate_saliency_map(model, x_test, y_test, n=0):
     plt.title('Saliency Map')
     plt.show()
 
-import tensorflow as tf
-
 def generate_gradcam_heatmap(model, img_array, last_conv_layer_name, pred_index=None):
     grad_model = Model([model.inputs], [model.get_layer(last_conv_layer_name).output, model.layers[-1].output])
     with tf.GradientTape() as tape:
@@ -142,35 +176,89 @@ def generate_gradcam_heatmap(model, img_array, last_conv_layer_name, pred_index=
 
 def test_gradcam(model, img):
     # Generate Grad-CAM heatmap
-    last_conv_layer_name = "conv2d_2"  # Replace with your last conv layer name
+    last_conv_layer_name = None
+    # Replace with the last conv layer name
     for l in model.layers:
         if isinstance(l, Conv2D):
             last_conv_layer_name = l.name
+    
+    if not last_conv_layer_name:
+        raise ValueError("Could not find a convolutional layer.")
+
     heatmap = generate_gradcam_heatmap(model, img, last_conv_layer_name)
 
     # Display heatmap
     plt.matshow(heatmap)
     plt.show()
 
-if __name__ == "__main__":
-    import sys
-    # model = tf.keras.applications.VGG16(weights='imagenet', include_top=False)
-    # get model file name from argument
-    if len(sys.argv) > 1:
-        path = sys.argv[1]
-    model = tf.keras.models.load_model("mnist_cnn-80k-99.4.keras" if not 'path' in locals() else path)
-    print_basic_weight_statistics(model)
-    (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
-    x_test = x_test.reshape(x_test.shape[0], 28, 28, 1)
-    x_test = x_test.astype('float32') / 255
-    y_train = tf.keras.utils.to_categorical(y_train, 10)
-    y_test = tf.keras.utils.to_categorical(y_test, 10)
-
-    for n in range(5):
-        test_generate_saliency_map(model, x_test, y_test, n=n+5)
+class VisualizationTests(tf.test.TestCase):
     
-    visualize_activations(model, x_test)
+    def test_plot_history_metrics(self):
+        model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
+        model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+        model.summary()
+        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+        x_train = x_train.reshape(x_train.shape[0], 28, 28, 1).astype('float32') / 255
+        x_test = x_test.reshape(x_test.shape[0], 28, 28, 1).astype('float32') / 255
+        y_train = tf.keras.utils.to_categorical(y_train, 10)
+        y_test = tf.keras.utils.to_categorical(y_test, 10)
+        history = model.fit(x_train, y_train, epochs=5, batch_size=32, validation_data=(x_test, y_test))
+        plot_history_metrics(history)
+    
+    # def test_print_basic_weight_statistics(self):
+    #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
+    #     print_basic_weight_statistics(model, show_conv=True)
+    
+    # def test_visualize_activations(self):
+    #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
+    #     (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    #     # x_train = x_train.reshape(x_train.shape[0], 28, 28, 1).astype('float32') / 255
+    #     # y_train = tf.keras.utils.to_categorical(y_train, 10)
+    #     x_test = x_test.reshape(x_test.shape[0], 28, 28, 1).astype('float32') / 255
+    #     y_test = tf.keras.utils.to_categorical(y_test, 10)
+    #     for i in range(2):
+    #         visualize_activations(model, x_test, n=2+i)
 
-    # test_gradcam(model, x_test[0:1])
+    # def test_generate_saliency_map(self):
+    #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
+    #     (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    #     # x_train = x_train.reshape(x_train.shape[0], 28, 28, 1).astype('float32') / 255
+    #     # y_train = tf.keras.utils.to_categorical(y_train, 10)
+    #     x_test = x_test.reshape(x_test.shape[0], 28, 28, 1).astype('float32') / 255
+    #     y_test = tf.keras.utils.to_categorical(y_test, 10)
+    #     test_generate_saliency_map(model, x_test, y_test, n=1)
+    
+    # def test_gradcam(self):
+    #     model = tf.keras.applications.VGG16(weights='imagenet', include_top=False)
+    #     img = tf.keras.preprocessing.image.load_img('vendor/tf-docs/site/en/tutorials/load_data/images/csv/Titanic.jpg')
+    #     img_array = tf.keras.preprocessing.image.img_to_array(img)
+    #     img_array = np.expand_dims(img_array, axis=0)
+    #     img_array = tf.keras.applications.vgg16.preprocess_input(img_array)
+    #     test_gradcam(model, img_array)
+    
+
+if __name__ == "__main__":
+    if True:
+        tf.test.main()
+    else:
+        import sys
+        # model = tf.keras.applications.VGG16(weights='imagenet', include_top=False)
+        # get model file name from argument
+        if len(sys.argv) > 1:
+            path = sys.argv[1]
+        model = tf.keras.models.load_model("mnist_cnn-80k-99.4.keras" if not 'path' in locals() else path)
+        print_basic_weight_statistics(model)
+        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+        x_test = x_test.reshape(x_test.shape[0], 28, 28, 1)
+        x_test = x_test.astype('float32') / 255
+        y_train = tf.keras.utils.to_categorical(y_train, 10)
+        y_test = tf.keras.utils.to_categorical(y_test, 10)
+
+        for n in range(5):
+            test_generate_saliency_map(model, x_test, y_test, n=n+5)
+        
+        visualize_activations(model, x_test)
+
+        # test_gradcam(model, x_test[0:1])
 
 # 
