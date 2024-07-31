@@ -3,6 +3,7 @@ import yfinance as yf
 import numpy as np
 import pandas as pd
 
+import datetime as dt
 from datetime import date
 
 from yfinance import Ticker
@@ -11,6 +12,8 @@ from requests import Session
 from requests_cache import CacheMixin, SQLiteCache
 from requests_ratelimiter import LimiterMixin, MemoryQueueBucket
 from pyrate_limiter import Duration, RequestRate, Limiter
+
+import pickle
 
 # import requests_cache
 
@@ -40,6 +43,26 @@ def get_tickers(symbols, start='2023-01-01', end='2024-01-01', verbose=False):
         print(f"dataset: {dataset}") if verbose > 0 else None
     return np.array(datasets)
 
+def update_dataset(original, new):
+    if original is None:
+        return new
+    if new is None:
+        return original
+    if isinstance(original, dict) and isinstance(new, dict):
+        for k in new.keys():
+            if k in original.keys():
+                original[k] = update_dataset(original[k], new[k])
+            else:
+                original[k] = new[k]
+        return original
+    if isinstance(original, pd.DataFrame) and isinstance(new, pd.DataFrame):
+        return pd.concat([original, new])
+    if isinstance(original, list) and isinstance(new, list):
+        return original + new
+    if isinstance(original, np.ndarray) and isinstance(new, np.ndarray):
+        return np.concatenate([original, new])
+    return new
+
 def get_ticker_data(ticker_symbol,
                     start="2023-01-01", end=date.today(),
                     period="max",
@@ -55,42 +78,111 @@ def get_ticker_data(ticker_symbol,
         except Exception as e:
             print(f"caught exception: {e}")
 
-        # TODO: some of the data could already be cached, check other dates
-        # find files in cache_dir that match the ticker_symbol
+        # some of the data could already be cached, check other dates
+        # by finding files in cache_dir that match the ticker_symbol
+        loaded_filename = None
         for f in os.listdir(cache_dir):
             if f.startswith(f'{ticker_symbol}_') and f.endswith('.pickle'):
                 print(f"Found file in cache: {f}") if verbose > 0 else None
-                dataset = pd.read_pickle(f"{cache_dir}{f}")
+                loaded_filename = f'{cache_dir}{f}'
+                dataset = pd.read_pickle(loaded_filename)
                 break
-        
+
         if 'dataset' in locals():
-            # check if the dataset is for the same date range
-            if dataset.Date.min() <= start and dataset.Date.max() >= end:
-                print(f"Returning cached data for {ticker_symbol
-                        } from {dataset.Date.min()} to {dataset.Date.max()}") if verbose > 0 else None
-                return dataset
-            
-            # check if the dataset has data for the start date
-            if dataset.Date.min() <= start:
-                print(f"Found cached data for {ticker_symbol} from {
-                    dataset.Date.min()} to {dataset.Date.max()}") if verbose > 0 else None
-                print(f"Getting data for {ticker_symbol} from {
-                    dataset.Date.max()} to {end}") if verbose > 0 else None
-                dataset = dataset.append(get_ticker_data(
-                    ticker_symbol, start=dataset.Date.max(),
-                    end=end, cache_dir=None))
-                return dataset
-            
-            # check if the dataset has data for the end date
-            if dataset.Date.max() >= end:
-                print(f"Found cached data for {ticker_symbol} from {
-                    dataset.Date.min()} to {dataset.Date.max()}") if verbose > 0 else None
-                print(f"Getting data for {ticker_symbol} from {
-                    start} to {dataset.Date.min()}") if verbose > 0 else None
-                dataset = get_ticker_data(
-                    ticker_symbol, start=start,
-                    end=dataset.Date.min(), cache_dir=None).append(dataset)
-                return dataset
+            if dataset.shape == ():
+                dataset = dataset[()]
+            # print(f"dataset type: {type(dataset)}") #if verbose > 0 else None
+            if not isinstance(dataset, dict):
+                raise ValueError(f"Expected dataset to be dict, got {type(dataset)}")
+            # else:
+            #     print(f"dataset keys: {dataset.keys()}") if verbose > 1 else None
+
+            if not (isinstance(dataset, dict) and 'symbol' in dataset.keys()):
+                raise ValueError(f"Invalid dataset, expected dict, got {type(dataset)}")
+            else:
+                # print(f"Keys: {dataset.keys()}") #if verbose > 0 else None
+
+                print(f"Checking cached data for {dataset['symbol']}") if verbose > 0 else None
+
+                if not 'history' in dataset.keys():
+                    raise ValueError(f"Invalid dataset, expected history in keys: {dataset.keys()}")
+                else:
+                    history = dataset['history']
+                    if not isinstance(history, pd.DataFrame):
+                        raise ValueError(f"Invalid history, expected DataFrame, got {type(history)}")
+                    else:
+                        # print(f"History.index {history.index}") #if verbose > 0 else None
+                        # print(f"Columns: {history.columns}") #if verbose > 0 else None  
+                        if not isinstance(history.index, pd.DatetimeIndex):
+                            raise ValueError(f"Invalid history, expected Date in columns: {history.columns}")
+                        else:
+                            start = pd.to_datetime(start).tz_localize('EST', ambiguous='raise')
+                            end = pd.to_datetime(end).tz_localize('EST', ambiguous='raise')
+                            if start.weekday() > 4:
+                                start = start + pd.DateOffset(days=8-start.weekday())
+                            if end.weekday() > 4:
+                                end = end + pd.DateOffset(days=8-end.weekday())
+                            date_min = history.index.min()
+                            date_max = history.index.max()
+                            print(f"Date range: {date_min} to {date_max}") #if verbose > 0 else None
+                            print(f"Start: {start} to {end}") #if verbose > 0 else None
+
+                            if date_min <= start and date_max >= end:
+                                print(f"Returning cached data for {ticker_symbol
+                                        } from {date_min} to {date_max}") if verbose > 0 else None
+                                return dataset
+                            
+                            # check if the dataset has data for the start date
+                            if date_min <= start:
+                                print(f"Found cached data for {ticker_symbol} from after start {
+                                    date_min} to {date_max}") if verbose > 0 else None
+                                print(f"Getting data for {ticker_symbol} from {
+                                    date_max} to {end}") if verbose > 0 else None
+                                dataset = update_dataset(
+                                    dataset, get_ticker_data(ticker_symbol,
+                                                             start=date_max,
+                                                             end=end,
+                                                             cache_dir=None)[()])
+                                with open(cache_filename, 'wb') as f:
+                                    pd.to_pickle(dataset, f)
+                                if loaded_filename is not cache_filename:
+                                    print(f"Removing previously loaded file: {loaded_filename}") if verbose > 0 else None
+                                    os.remove(loaded_filename)
+                                return dataset
+
+                            # check if the dataset has data for the end date
+                            if date_max >= end:
+                                print(f"Found cached data for {ticker_symbol} from after end {
+                                    date_min} to {date_max}") if verbose > 0 else None
+                                print(f"Getting data for {ticker_symbol} from {
+                                    start} to {date_min}") if verbose > 0 else None
+                                dataset = update_dataset(
+                                    get_ticker_data(ticker_symbol,
+                                        start=start, end=date_min,
+                                        cache_dir=None)[()], dataset)
+                                with open(cache_filename, 'wb') as f:
+                                    pd.to_pickle(dataset, f)
+                                if loaded_filename is not cache_filename:
+                                    print(f"Removing previously loaded file: {loaded_filename}") if verbose > 0 else None
+                                    os.remove(loaded_filename)
+                                return dataset
+                            
+                            if start < date_min and end > date_max:
+                                print(f"Found cached data for {ticker_symbol} from after start to before end {
+                                    date_min} to {date_max}") if verbose > 0 else None
+                                print(f"Getting data for {ticker_symbol} from {
+                                    date_min} to {date_max}") if verbose > 0 else None
+                                dataset = get_ticker_data(
+                                    ticker_symbol, start=date_min, end=date_max, cache_dir=None)[()]
+                                with open(cache_filename, 'wb') as f:
+                                    pd.to_pickle(dataset, f)
+                                if loaded_filename is not cache_filename:
+                                    print(f"Removing previously loaded file: {loaded_filename}") if verbose > 0 else None
+                                    os.remove(loaded_filename)
+                                return dataset
+
+    if 'dataset' in locals():
+        raise ValueError(f"We should've returned by now")
 
     print(f"Getting ticker data for {ticker_symbol}")
     # create Ticker object    
@@ -181,6 +273,7 @@ def get_ticker_data(ticker_symbol,
     insider_purchases = None
     insider_roster_holders = None
     insider_transactions = None
+    institutional_holders = None
     major_holders = None
     rev_forecast = None
     shares = None
@@ -214,6 +307,11 @@ def get_ticker_data(ticker_symbol,
     try:
         insider_transactions = symbol.get_insider_transactions(as_dict=True)
         print(f"insider transactions: {insider_transactions}") if verbose > 1 else None
+    except Exception as e:
+        pass
+    try:
+        institutional_holders = symbol.get_institutional_holders(as_dict=True)
+        print(f"institutional holders: {institutional_holders}") if verbose > 1 else None
     except Exception as e:
         pass
     try:
@@ -255,7 +353,7 @@ def get_ticker_data(ticker_symbol,
             'insider_purchases': insider_purchases,
             'insider_roster_holders': insider_roster_holders,
             'insider_transactions': insider_transactions,
-            'institutional_holders': symbol.get_institutional_holders(as_dict=True),
+            'institutional_holders': institutional_holders,
             'major_holders': major_holders,
             'news': symbol.get_news(),
             'recommendations': symbol.get_recommendations(as_dict=True),
@@ -273,7 +371,10 @@ def get_ticker_data(ticker_symbol,
     if isinstance(cache_dir, str):
         import pickle
         with open(cache_filename, 'wb') as f:
-            pickle.dump(result, f)
+            pd.to_pickle(result, f)
+        if loaded_filename is not None:
+            print(f"Removing previously loaded file: {loaded_filename}") if verbose > 0 else None
+            os.remove(loaded_filename)
 
     return result
     
@@ -370,16 +471,16 @@ def list_markets(verbose=False):
     stock_symbols = get_top_symbols_in_todays_news()
     data = []
     for s in stock_symbols:
-        try:
-            data.append(get_ticker_data(s, verbose=verbose))
-        except Exception as e:
-            print(f"caught exception: {e}")
+        # try:
+        data.append(get_ticker_data(s, verbose=verbose))
+        # except Exception as e:
+        #     print(f"caught exception: {e}")
     return data
 
 
 class YahooFinanceDataTest(tf.test.TestCase):
     # def test_yf(self):
-    #     data = yahoofinance_data('AAPL', verbose=True)
+    #     data = yahoofinance_data('ABCL', verbose=True)
     #     print(f"yahoofinance data: {data}")
     
         

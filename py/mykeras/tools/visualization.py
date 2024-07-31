@@ -10,8 +10,13 @@ from tensorflow.keras.models import Model # type: ignore
 from scipy.ndimage import zoom
 
 import math
+import os
+import cv2
 
-def make_training_videos(model, training_data, path='videos/', resolution=(1920, 1080)):
+from py.mykeras.tools.models import get_all_weights
+
+
+def make_training_videos(model, training_data, path='videos/', resolution=(1920, 1080), verbose=1):
     '''
     Create videos of the training process by grabbing the weights at each epoch
     and plotting them as frames of the video. Also plot the loss values.
@@ -22,21 +27,15 @@ def make_training_videos(model, training_data, path='videos/', resolution=(1920,
     os.makedirs(path, exist_ok=True)
     model_name = model.name
     path_pfx = f"{path}{model_name}"
+    print(f"Creating videos for model {model_name} at path {path_pfx}") if verbose > 0 else None
+    
     # x_train, y_train, x_test, y_test = training_data
 
     img_shape = [resolution[1], resolution[0]]
 
     # start by figuring out the structure and layout of the model
-    layer_weights = {}
-    for layer in model.layers:
-        print(layer.name, layer.input, layer.output)
-        weights = np.zeros(img_shape)
-        if hasattr(layer, 'get_weights'):
-            layer_weights = layer.get_weights()
-            if layer_weights:
-                np.concatenate(weights, (np.concatenate([w.flatten() for w in layer_weights])))
-        layer_weights[layer.name] = weights
-    
+    layer_weights = get_all_weights(model)
+
     # create a video for each layer
     for layer_name, weights in layer_weights.items():
         fig, ax = plt.subplots()
@@ -349,15 +348,15 @@ def test_gradcam(model, img):
 
 class VisualizationTests(tf.test.TestCase):
 
-    def test_make_training_video(self):
-        model = tf.keras.models.load_model("models/rnn-mnist-97.8.keras")
-        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
-        x_train = x_train.reshape((x_train.shape[0], 28, 28, 1)).astype('float32') / 255
-        x_test = x_test.reshape((x_test.shape[0], 28, 28, 1)).astype('float32') / 255
-        y_train = tf.keras.utils.to_categorical(y_train, 10)
-        y_test = tf.keras.utils.to_categorical(y_test, 10)
-        training_data = (x_train[:10], y_train[:10], x_test[:10], y_test[:10])
-        make_training_videos(model, training_data)
+    # def test_make_training_video(self):
+    #     model = tf.keras.models.load_model("models/rnn-mnist-97.8.keras")
+    #     (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+    #     x_train = x_train.reshape((x_train.shape[0], 28, 28, 1)).astype('float32') / 255
+    #     x_test = x_test.reshape((x_test.shape[0], 28, 28, 1)).astype('float32') / 255
+    #     y_train = tf.keras.utils.to_categorical(y_train, 10)
+    #     y_test = tf.keras.utils.to_categorical(y_test, 10)
+    #     training_data = (x_train[:10], y_train[:10], x_test[:10], y_test[:10])
+    #     make_training_videos(model, training_data)
     
     # def test_make_training_video(self):
     #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
@@ -393,6 +392,15 @@ class VisualizationTests(tf.test.TestCase):
     # def test_print_basic_weight_statistics(self):
     #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
     #     print_basic_weight_statistics(model, show_conv=True)
+    
+    def test_print_basic_weight_statistics_for_all_known_models(self):
+        import os
+        for file in os.listdir("models"):
+            if file.endswith(".keras") or file.endswith(".h5"):
+                print("Loading model: ", file)
+                model = tf.keras.models.load_model(f"models/{file}")
+                print_basic_weight_statistics(model, show_conv=False)
+                print('\n')
     
     # def test_visualize_activations(self):
     #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")

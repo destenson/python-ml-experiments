@@ -2,10 +2,10 @@
 import tensorflow as tf
 
 
-# Dynamic Model that can handle 1D, 2D, 3D, and 4D output shapes.
-class DynamicModel(tf.keras.Model):
+# Dynamic sequential model that can handle 1D, 2D, 3D, and 4D output shapes.
+class DynamicSequentialModel(tf.keras.Model):
 
-    def __init__(self, output_shape=(10,), internal_activations='relu', use_bias=True, output_activation='sigmoid', name='dynamic_model', *args, **kwargs):
+    def __init__(self, output_shape=(10,), use_bias=True, output_activation='sigmoid', name='dynamic_model', *args, **kwargs):
         super().__init__(name=name, *args, **kwargs)
         self.output_shape = output_shape
         self.output_layers = []
@@ -28,9 +28,10 @@ class DynamicModel(tf.keras.Model):
             self.output_layers.append(tf.keras.layers.Reshape(self.output_shape))
         else:
             raise ValueError('The output shape must be 1D, 2D, 3D, or 4D')
+        self.dynamic_layers = []
 
     def call(self, inputs):
-        for layer in self.output_layers:
+        for layer in self.get_layers():
             inputs = layer(inputs)
         return inputs
 
@@ -65,37 +66,29 @@ class DynamicModel(tf.keras.Model):
     def predict_step(self, inputs):
         # Adding dummy dimension using tf.expand_dims and converting to float32 using tf.cast
         x = tf.cast(tf.expand_dims(inputs, axis=0), tf.float32)
-        # # Passing low resolution image to model
-        # super_resolution_img = self(x, training=False)
-        # # Clips the tensor from min(0) to max(255)
-        # super_resolution_img = tf.clip_by_value(super_resolution_img, 0, 255)
-        # # Rounds the values of a tensor to the nearest integer
-        # super_resolution_img = tf.round(super_resolution_img)
-        # # Removes dimensions of size 1 from the shape of a tensor and converting to uint8
-        # super_resolution_img = tf.squeeze(
-        #     tf.cast(super_resolution_img, tf.uint8), axis=0
-        # )
-        # return super_resolution_img
-        for layer in self.output_layers:
+        for layer in self.get_layers():
             x = layer(x)
         return x
+
+    def get_layers(self):
+        return self.dynamic_layers + self.output_layers
     
 class DynamicModelTest(tf.test.TestCase):
 
     def test_create_dynamic_model(self):
-        model = DynamicModel(output_shape=(2,2))
+        model = DynamicSequentialModel(output_shape=(2,2))
         self.assertIsInstance(model, tf.keras.Model)
         model.build((None, 2, 2))
         model.summary()
     
     def test_compile_dynamic_model(self):
-        model = DynamicModel(output_shape=(1,))
+        model = DynamicSequentialModel(output_shape=(1,))
         model.compile(optimizer='adam', loss='mse')
         model.build((None, 1))
         model.summary()
 
     def test_train_dynamic_model(self):
-        model = DynamicModel(output_shape=(1,))
+        model = DynamicSequentialModel(output_shape=(1,))
         model.compile(optimizer='adam', loss='mse')
         # model.build((None, 1))
         model.fit(tf.random.normal((100, 1)), tf.random.normal((100, 1)), epochs=10)
