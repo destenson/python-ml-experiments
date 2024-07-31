@@ -277,6 +277,7 @@ def get_ticker_data(ticker_symbol,
     major_holders = None
     rev_forecast = None
     shares = None
+    shares_full = None
     trend_details = None
     
     try:
@@ -330,6 +331,11 @@ def get_ticker_data(ticker_symbol,
     except Exception as e:
         pass
     try:
+        shares_full = symbol.get_shares_full(start=start, end=end)
+        print(f"shares full: {shares_full}") if verbose > 1 else None
+    except Exception as e:
+        pass
+    try:
         trend_details = symbol.get_trend_details(as_dict=True)
         print(f"trend details: {trend_details}") if verbose > 1 else None
     except Exception as e:
@@ -360,7 +366,7 @@ def get_ticker_data(ticker_symbol,
             'recommendations_summary': symbol.get_recommendations_summary(as_dict=True),
             'rev_forecast': rev_forecast,
             'shares': shares,
-            'shares_full': symbol.get_shares_full(start=start, end=end),
+            'shares_full': shares_full,
             'splits': symbol.get_splits(),
             'trend_details': trend_details,
             'upgrades_downgrades': symbol.get_upgrades_downgrades(as_dict=True),
