@@ -1,4 +1,5 @@
-aapl_data = get_ticker("AAPL", verbose=1, nocache=True)
+import tensorflow as tf
+
 
 def study_data(data, window_size=69, num_states=4, num_runs=10, daily_change_prob=0.2):
     print(f"study_data({locals()})")
@@ -98,6 +99,7 @@ def log_prob(hmm, mean_prior, std_prior, means, stds, observations):
 
 
 
+aapl_data = get_ticker("AAPL", verbose=1, nocache=True)
 
 ## collect 70 samples
 # interesting_columns = ['Open', 'Close', 'High', 'Low']
@@ -144,4 +146,3 @@ plt.plot()
 
 
 # tf.compat.v1.enable_eager_execution()
-
