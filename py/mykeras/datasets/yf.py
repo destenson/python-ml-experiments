@@ -64,7 +64,7 @@ def update_dataset(original, new):
     return new
 
 def get_ticker_data(ticker_symbol,
-                    start="2023-01-01", end=date.today(),
+                    start="2023-01-01", end=date.today()-dt.timedelta(days=1),
                     period="max",
                     cache_dir='data/',
                     verbose=False):
@@ -108,12 +108,16 @@ def get_ticker_data(ticker_symbol,
                     raise ValueError(f"Invalid dataset, expected history in keys: {dataset.keys()}")
                 else:
                     history = dataset['history']
-                    if not isinstance(history, pd.DataFrame):
+                    if not isinstance(history, pd.DataFrame) and not isinstance(history, pd.Index):                        
                         raise ValueError(f"Invalid history, expected DataFrame, got {type(history)}")
                     else:
-                        # print(f"History.index {history.index}") #if verbose > 0 else None
-                        # print(f"Columns: {history.columns}") #if verbose > 0 else None  
-                        if not isinstance(history.index, pd.DatetimeIndex):
+                        print(f"History.index {history.index}") if verbose > 1 else None
+                        print(f"Columns: {history.columns}") if verbose > 1 else None
+                        if isinstance(history.index, pd.Index) and history.index.name != 'Date':
+                            raise ValueError(f"Invalid history, expected Date in columns: {history.columns}")                            
+                        if not isinstance(history.index, pd.DatetimeIndex) and not isinstance(history.index, pd.Index):
+                            print(f"History.index {history.index}") if verbose < 2 else None
+                            print(f"Columns: {history.columns}") if verbose < 2 else None
                             raise ValueError(f"Invalid history, expected Date in columns: {history.columns}")
                         else:
                             start = pd.to_datetime(start).tz_localize('EST', ambiguous='raise')
@@ -122,10 +126,15 @@ def get_ticker_data(ticker_symbol,
                                 start = start + pd.DateOffset(days=8-start.weekday())
                             if end.weekday() > 4:
                                 end = end + pd.DateOffset(days=8-end.weekday())
+                            print(f"{history.head()} .. {history.tail()}") if verbose > 1 else None
+                            if len(history) == 0:
+                                print(f"Empty history for {ticker_symbol}") if verbose > 0 else None
+                                return get_ticker_data(ticker_symbol, start=start, end=end, cache_dir=None)
                             date_min = history.index.min()
                             date_max = history.index.max()
-                            print(f"Date range: {date_min} to {date_max}") #if verbose > 0 else None
-                            print(f"Start: {start} to {end}") #if verbose > 0 else None
+                            print(f"Date range: {date_min} to {date_max}") if verbose > 0 else None
+                            print(f"Start: {start} to {end}") if verbose > 0 else None
+                            print(f"{history.head()} .. {history.tail()}") if verbose > 1 else None
 
                             if date_min <= start and date_max >= end:
                                 print(f"Returning cached data for {ticker_symbol
