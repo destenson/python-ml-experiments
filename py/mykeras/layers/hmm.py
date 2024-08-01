@@ -15,6 +15,7 @@ from tensorflow.keras.optimizers import Adam
 import numpy as np
 import keras
 
+## prints the version of tensorflow & clears custom objects
 # print(tf.__version__)
 # keras.saving.get_custom_objects().clear()
 
@@ -96,17 +97,16 @@ class HMMNeuronLayer(tf.keras.layers.Layer):
 
 
 
-def test_hmm_neuron_layer():
-    # Create an instance of HMMNeuronLayer
-    hmm_neuron_layer = HMMNeuronLayer(units=1, num_hmm_states=5, name='hmm_neuron_layer_test')
-    print(hmm_neuron_layer)
-    print(hmm_neuron_layer(tf.random.normal((2, 2, 2))))
-
-# test_hmm_neuron_layer()
-
-
 class TestHmmLayer(tf.test.TestCase):
     
+    def test_hmm_neuron_layer(self):
+        # Create an instance of HMMNeuronLayer
+        hmm_neuron_layer = HMMNeuronLayer(units=7, num_hmm_states=15, name='hmm_neuron_layer_test')
+        # print(hmm_neuron_layer)
+        self.assertEqual(hmm_neuron_layer.units, 7)
+        self.assertEqual(hmm_neuron_layer.num_hmm_states, 15)
+        print(hmm_neuron_layer(tf.random.normal((22, 1))))
+
     def setUp(self):
         super().setUp()
         self.hmm_layer = HMMNeuronLayer(units=1, num_hmm_states=5, name='hmm_layer')
@@ -148,7 +148,7 @@ class TestHmmLayer(tf.test.TestCase):
             'metrics': ['accuracy']
         }
         model.compile(**compile_kwargs)
-        # model.summary()
+        model.summary()
 
 
     def test_get_config(self):
@@ -166,8 +166,10 @@ class TestHmmLayer(tf.test.TestCase):
             },
             'trainable': True,
         }, config)
-
+        
 
 if __name__ == '__main__':
-    test_hmm_neuron_layer()
     tf.test.main()
+
+
+#

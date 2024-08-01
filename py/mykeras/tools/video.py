@@ -43,13 +43,19 @@ class VideoTesting(tf.test.TestCase):
     
     def test_make_video(self):
         frames = [
-            np.random.randint(0, 255, (480, 720, 3), dtype=np.uint8) for _ in range(1000)]
-        print(frames[0].shape)
+            np.random.randint(0, 255, (480, 720, 3), dtype=np.uint8) for _ in range(10)]
+        print(f"frames len = {len(frames)}")
+        print(f"frames[0].shape = {frames[0].shape}")
         # plt.plot(frames)
         # plt.imshow(frames[0])
-        create_video(frames, fps=15)
-        frames2 = read_video('output.mp4')
-        # self.assertAllEqual(frames, frames2)
+        create_video(frames, fps=10)
+        frames2 = np.array(
+            read_video('output.mp4')).reshape(-1, 480, 720, 3)
+        print(f"frames2 len = {len(frames2)}")
+        print(f"frames2[0].shape = {frames2[0].shape}")
+        loss = tf.keras.losses.MeanSquaredError()(np.array(frames), frames2) / 480 / 720 / 3 / len(frames)
+        print(f"loss per channel = {float(loss)}")
+        self.assertLess(loss, 1e-3)
         # plt.plot(frames2[0][0])
         
 

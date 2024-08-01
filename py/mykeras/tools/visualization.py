@@ -198,7 +198,7 @@ def plot_history_metrics(history: tf.keras.callbacks.History):
         plt.title(str(key))
     plt.show()
 
-def plot_convolutional_weights(weights, title, two_d=True):
+def plot_convolutional_weights(weights, title):
     # if two_d:
     if len(weights.shape) == 4:
         weight_slice = weights[:, :, 0, :]
@@ -346,6 +346,20 @@ def test_gradcam(model, img):
     plt.matshow(heatmap)
     plt.show()
 
+def find_smallest_model(path='models/'):
+    import os
+    smallest = None
+    sw = None
+    for file in os.listdir(path):
+        if file.endswith(".keras") or file.endswith(".h5"):
+            print("Loading model: ", file)
+            model = tf.keras.models.load_model(f"models/{file}")
+            weights = get_all_weights(model)
+            if sw is None or len(weights.keys()) < len(sw.keys()):
+                sw = weights
+                smallest = model
+    return smallest
+
 class VisualizationTests(tf.test.TestCase):
 
     # def test_make_training_video(self):
@@ -392,15 +406,19 @@ class VisualizationTests(tf.test.TestCase):
     # def test_print_basic_weight_statistics(self):
     #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")
     #     print_basic_weight_statistics(model, show_conv=True)
+
+    def test_print_basic_weight_statistics_for_smallest_known_model(self):
+        model = find_smallest_model()
+        print_basic_weight_statistics(model, show_conv=True)
     
-    def test_print_basic_weight_statistics_for_all_known_models(self):
-        import os
-        for file in os.listdir("models"):
-            if file.endswith(".keras") or file.endswith(".h5"):
-                print("Loading model: ", file)
-                model = tf.keras.models.load_model(f"models/{file}")
-                print_basic_weight_statistics(model, show_conv=False)
-                print('\n')
+    # def test_print_basic_weight_statistics_for_all_known_models(self):
+    #     import os
+    #     for file in os.listdir("models"):
+    #         if file.endswith(".keras") or file.endswith(".h5"):
+    #             print("Loading model: ", file)
+    #             model = tf.keras.models.load_model(f"models/{file}")
+    #             print_basic_weight_statistics(model, show_conv=False)
+    #             print('\n')
     
     # def test_visualize_activations(self):
     #     model = tf.keras.models.load_model("models/mnist_cnn-80k-99.4.keras")

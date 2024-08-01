@@ -11,19 +11,22 @@ def get_custom_objects():
         "MyKeras>EKFLayer": EKFLayer,
     }
 
-class ObservationFunction(keras.Function):
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+
+# class ObservationFunction(keras.Function):
+#     def __init__(self, **kwargs):
+#         super().__init__(**kwargs)
     
-    def call(self, x):
-        return x
+#     def call(self, x):
+#         print("ObservationFunction called")
+#         return x
 
 @keras.utils.register_keras_serializable(package="MyKeras")
 class EKFLayer(tf.keras.layers.Layer):
     def __init__(self,
                  transition_fn, observation_fn,
                  transition_jacobian_fn, observation_jacobian_fn,
-                 state_prior_mu = None, state_prior_sigma=None,
+                 state_prior_mu: tf.Variable|None = None,
+                 state_prior_sigma: tf.Variable|None = None,
                  mu_initializer = 'normal', sigma_initializer='ones', **kwargs):
         super().__init__(**kwargs)
         self.input_shape = None
@@ -46,7 +49,7 @@ class EKFLayer(tf.keras.layers.Layer):
             regularizer=None,
             dtype=tf.float32,
             trainable=True,
-            name='prior_mu'
+            name='prior_mu',
         )
         
         self.state_prior_sigma = self.state_prior_sigma or self.add_weight(
@@ -67,7 +70,10 @@ class EKFLayer(tf.keras.layers.Layer):
             "transition_jacobian_fn": self.transition_jacobian_fn,
             "observation_jacobian_fn": self.observation_jacobian_fn,
             "state_prior_mu": self.state_prior_mu.numpy(),
-            "state_prior_sigma": self.state_prior_sigma.numpy()
+            "state_prior_sigma": self.state_prior_sigma.numpy(),
+            "mu_initializer": self.mu_initializer,
+            "sigma_initializer": self.sigma_initializer,
+            
         })
         return config
     
@@ -111,9 +117,18 @@ def test_ekf_layer(transition_fn, observation_fn, transition_jacobian_fn, observ
 
     # Example usage in a Keras model
     inputs = tf.keras.Input(shape=(None, 2))
-    initial_state = tf.keras.Input(shape=(2,))
+    initial_state = tf.keras.Input(shape=(None, 2))
     filtered_means = ekf_layer([inputs, initial_state])
     model = tf.keras.Model(inputs=[inputs, initial_state], outputs=filtered_means)
     model.summary()
 
-test_ekf_layer(None, None, None, None)
+
+class EkfLayerTest(tf.test.TestCase):
+    def test_ekf_layer(self):
+        # this isn't working yet
+        test_ekf_layer(None, None, None, None)
+
+if __name__ == "__main__":
+    tf.test.main()
+
+#

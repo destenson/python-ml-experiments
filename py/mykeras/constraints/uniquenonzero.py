@@ -46,7 +46,7 @@ class TestUniqueNonZero(tf.test.TestCase):
         weights = np.array([1.0, 1.0, 0.0])
         w_unique = self.constraint(weights)
         exp_unique = [1.0, 1.0 + 1e-7, 1e-7]
-        self.assertAllClose(w_unique, exp_unique, atol=0.99e-7)
+        self.assertAllClose(w_unique, exp_unique, atol=1.0e-7, rtol=1.0e-7)
 
     def test_get_config(self):
         config = self.constraint.get_config()

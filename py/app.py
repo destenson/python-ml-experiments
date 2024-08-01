@@ -22,9 +22,9 @@ import tempfile
 import py.mykeras.layers.gcp as gcp_py
 import py.mykeras.layers.hmm as hmm_layer_py
 import losses as losses_py
-import py.mykeras.layers.svdlayer as svd_layer_py
+import py.mykeras.layers.svd as svd_layer_py
 
-from py.mykeras.layers.svdlayer import SVDLayer, UniqueNonZero
+from py.mykeras.layers.svd import SVDLayer, UniqueNonZero
 from py.mykeras.layers.hmm import HMMNeuronLayer
 
 # @st.cache_data

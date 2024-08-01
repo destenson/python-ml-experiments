@@ -200,12 +200,12 @@ class LstmFunctionTests(tf.test.TestCase):
                 
 
 if __name__ == "__main__":
-    if False:
+    if True:
         tf.test.main()
     else:
         print(tf.__version__)
         # model = simple_lstm(10)
-        model = tf.keras.models.load_model('mnist_lstm.keras')
+        model = tf.keras.models.load_model('models/mnist_lstm.keras')
         print(model.summary())
         # weights = model.layers[0].get_weights()
         # stats = lstm_weight_statistic(weights)

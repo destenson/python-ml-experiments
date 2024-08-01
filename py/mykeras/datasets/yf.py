@@ -89,7 +89,7 @@ def get_ticker_data(ticker_symbol,
                 break
 
         if 'dataset' in locals():
-            if dataset.shape == ():
+            if not isinstance(dataset, dict) and dataset.shape == ():
                 dataset = dataset[()]
             # print(f"dataset type: {type(dataset)}") #if verbose > 0 else None
             if not isinstance(dataset, dict):
