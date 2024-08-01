@@ -4,6 +4,19 @@ from tensorflow.keras.layers import Layer
 import numpy as np
 import pandas as pd
 
+
+# Recursively walking the layer graph works as well
+def walk_layers(layer):
+    if hasattr(layer, "layers"):
+        for layer in layer.layers:
+            walk_layers(layer)
+    else:
+        print(layer.name)
+
+
+# print("\nWalking model layers:\n")
+# walk_layers(model)
+
 def get_all_weights(model):
     # for layer in model.layers:
     #     print(layer.name, layer.input, layer.output)
