@@ -2,3 +2,16 @@
 **/__pycache__/
 **/vendor/
 **/*.pickle
+**/*.kerass
+
+*.h5
+*.keras
+*.log
+*.mp4
+
+data/yfinance.cache
+autoencoder-2dim/
+cgan_mnist/
+test_outputs/
+
+.vscode/
