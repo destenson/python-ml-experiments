@@ -1,5 +1,7 @@
+import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
+import keras
 
 import os
 import math
@@ -59,6 +61,30 @@ def display_images(imgs,
         plt.show()
     
     plt.close('all')
+
+def image_augmentation_model(imgs):
+    """Define image augmentation model
+
+    Arguments:
+    imgs (tensor): training images
+
+    Returns:
+    imgs (tensor): augmented images
+
+    """
+
+    # Define image augmentation model
+    image_augmentation = keras.Sequential(
+        [
+            keras.layers.RandomFlip(mode="horizontal"),
+            keras.layers.RandomRotation(factor=0.1),
+            keras.layers.RandomZoom(height_factor=(-0.1, -0)),
+            keras.layers.RandomContrast(factor=0.1),
+        ],
+    )
+
+    # Apply the augmentations to the images
+    return image_augmentation(imgs)
 
 
 
