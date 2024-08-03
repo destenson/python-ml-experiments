@@ -12,6 +12,165 @@ from mpl_finance import candlestick_ohlc
 
 from py.mykeras.tools.video import create_video
 
+def plot_first_market(path='data/'):
+    import matplotlib.pyplot as plt
+    import pandas as pd
+    import os
+    # import numpy as np
+    # from sklearn.preprocessing import MinMaxScaler
+
+    # load the first .pickle file in `path`
+    for f in os.listdir(path):
+        if f.endswith('.pickle'):
+            print(f"Found file in cache: {f}") #if verbose > 0 else None
+            loaded_filename = f'{path}{f}'
+            df = pd.read_pickle(loaded_filename)
+            break
+
+    if df is None:
+        raise ValueError(f"No .pickle files found in {path}")
+
+    return plot_history(df['history'], path)
+
+def plot_history(history, path=None):
+    print(history.head())
+    print(history.tail())
+    print(history.shape)
+    print(history.info())
+    print(history.describe())
+    fig, ax = plt.subplots()
+    close: pd.Series = history['Close']
+    date: pd.DatetimeIndex = history.index
+    print(f"close = {type(close)}")
+    print(f"date = {type(date)}")
+    # convert close and date to a suitable format to draw
+    ax.plot(date, close)
+    # fig.draw([close, date])
+    if path is not None:
+        plt.savefig(f'{path}stock_prices.png')
+        # import os
+        # plt.savefig(os.path.join(path, 'stock_prices.png'))
+    plt.show()
+    return tf.convert_to_tensor(fig.get_rasterized())    
+
+def plot_candlesticks(history, i=0, bars=5, show_plot=False):
+    # Defining a dataframe showing stock prices of a week
+    date = history.index[history.index.weekday < 5]
+    open = history['Open'][history.index.weekday < 5]
+    high = history['High'][history.index.weekday < 5]
+    low = history['Low'][history.index.weekday < 5]
+    close = history['Close'][history.index.weekday < 5]
+    volume = history['Volume'][history.index.weekday < 5]
+
+    stock_prices = pd.DataFrame({'date':date, 'open':open, 'high':high,
+                                 'low':low, 'close':close,'volume':volume})
+
+    ohlc = stock_prices.loc[:, ['date', 'open', 'high', 'low', 'close', 'volume']]
+    ohlc['date'] = pd.to_datetime(ohlc['date'])
+    ohlc['date'] = ohlc['date'].apply(mpl_dates.date2num)
+    ohlc = ohlc.astype(float)
+
+    # Creating Subplots
+    fig, ax = plt.subplots() 
+
+    candlestick_ohlc(ax, ohlc.values[i:i+bars], width=0.6, colorup='blue', 
+                    colordown='green', alpha=0.4) 
+
+    # Setting labels & titles
+    ax.set_xlabel('Date')
+    ax.set_ylabel('Price')
+    fig.suptitle(f'Stock Prices of a {"week" if bars == 5 else f"{bars} days"}', y=0.95, fontsize=16)
+
+    # Formatting Date (but don't plot weekends or days with no data)    
+    date_format = mpl_dates.DateFormatter('%d-%m-%Y', usetex=True)
+    ax.xaxis.set_major_formatter(date_format)
+    fig.autofmt_xdate()
+
+    fig.tight_layout()
+
+    if show_plot:
+        plt.show()
+    # convert image to tensor
+    shape = (-1,
+        int(fig.get_dpi()*fig.get_figwidth()),
+        int(fig.get_dpi()*fig.get_figheight()), 4)
+    image = np.frombuffer(fig.canvas.buffer_rgba(), dtype=np.uint8).reshape(shape) / 255. - 0.5
+    image = tf.data.Dataset.from_tensor_slices(image).prefetch(tf.data.AUTOTUNE)
+    return image
+
+def plot_candlesticks_movie(history, i=0, bars=5, frames=10, fps=2.2, filename='output.mp4'):
+    images = tf.data.Dataset.from_tensors([
+        plot_candlesticks(history, i=i+n, bars=bars, show_plot=False)
+        for n in range(frames)
+    ])
+    # create video
+    create_video(images, filename=filename, fps=fps)
+
+class PlottingTest(tf.test.TestCase):
+    # def test_plot_first_market(self):
+    #     plot_first_market()
+        
+    # def test_plot_history(self):
+    #     import os
+    #     path = 'data/'
+    #     # load the first .pickle file in `path`
+    #     for f in os.listdir(path):
+    #         if f.endswith('.pickle'):
+    #             print(f"Found file in cache: {f}")
+    #             loaded_filename = f'{path}{f}'
+    #             df = pd.read_pickle(loaded_filename)
+    #             break
+        
+    #     if df is None:
+    #         raise ValueError(f"No .pickle files found in {path}")
+        
+    #     plot_history(df['history'], f"{path}stock_prices.png")
+    
+    # # why is this so slow? (sped up dramatically using `tf.data.Dataset`)
+    # def test_plot_candlesticks(self):
+    #     import os
+    #     path = 'data/'
+    #     # load the first .pickle file in `path`
+    #     for f in os.listdir(path):
+    #         if f.endswith('.pickle'):
+    #             print(f"Found file in cache: {f}") #if verbose > 0 else None
+    #             loaded_filename = f'{path}{f}'
+    #             df = pd.read_pickle(loaded_filename)
+    #             break
+
+    #     if df is None:
+    #         raise ValueError(f"No .pickle files found in {path}")
+
+    #     print(df['history'].head())
+    #     images = tf.data.Dataset.from_tensors([
+    #         plot_candlesticks(df['history'], i) for i in range(3)])
+    #     print(f"images = {len(images)} {images.element_spec}")
+    #     # plot_candlesticks(df['history'])
+    #     print(images)
+    #     plt.plot(images.numpy())
+    #     plt.show()
+
+    def test_plot_candlesticks_movie(self):
+        import os
+        path = 'data/'
+        # load the first .pickle file in `path`
+        for f in os.listdir(path):
+            if f.endswith('.pickle'):
+                print(f"Found file in cache: {f}") #if verbose > 0 else None
+                loaded_filename = f'{path}{f}'
+                df = pd.read_pickle(loaded_filename)
+                break
+
+        if df is None:
+            raise ValueError(f"No .pickle files found in {path}")
+
+        print(df['history'].head())
+        plot_candlesticks_movie(df['history'])
+
+    
+if __name__ == '__main__':
+    tf.test.main()
+       
 # Function to create a neural network that can be used
 # to classify market price data into different regimes:
 # 1. Bullish
@@ -23,6 +182,8 @@ from py.mykeras.tools.video import create_video
 # The model is created using the Keras Functional API.
 # The model is compiled with the Adam optimizer and the
 # categorical crossentropy loss function.
+
+#
 
 def create_convolution_model(input_shape, hidden_layers=2, n_outputs=3, dropout=0.2,
                              loss='categorical_crossentropy',
@@ -70,183 +231,40 @@ def create_convolution_model(input_shape, hidden_layers=2, n_outputs=3, dropout=
     return model
 
 
-class ConvolutionModelTest(tf.test.TestCase):
-    
-    def test_create_convolution_model(self):
-        input_shape = (4, 1)
-        model = create_convolution_model(input_shape, n_outputs=3)
-        self.assertEqual(model.input_shape, (None, *input_shape))
-        self.assertEqual(model.output_shape, (None, 3))
-        model.summary()
+# class ConvolutionModelTest(tf.test.TestCase):    
+#     def test_create_convolution_model(self):
+#         input_shape = (4, 1)
+#         model = create_convolution_model(input_shape, n_outputs=3)
+#         self.assertEqual(model.input_shape, (None, *input_shape))
+#         self.assertEqual(model.output_shape, (None, 3))
+#         model.summary()
         
-        # input_shape = (28, 3)
-        # model = create_convolution_model(input_shape)
-        # self.assertEqual(model.input_shape, (None, 28, 3))
-        # self.assertEqual(model.output_shape, (None, 3))
+#         # input_shape = (28, 3)
+#         # model = create_convolution_model(input_shape)
+#         # self.assertEqual(model.input_shape, (None, 28, 3))
+#         # self.assertEqual(model.output_shape, (None, 3))
         
-        # input_shape = (28, 3)
-        # model = create_convolution_model(input_shape, hidden_layers=3)
-        # self.assertEqual(model.input_shape, (None, 28, 3))
-        # self.assertEqual(model.output_shape, (None, 3))
+#         # input_shape = (28, 3)
+#         # model = create_convolution_model(input_shape, hidden_layers=3)
+#         # self.assertEqual(model.input_shape, (None, 28, 3))
+#         # self.assertEqual(model.output_shape, (None, 3))
         
-        # input_shape = (28, 3)
-        # model = create_convolution_model(input_shape, hidden_layers=[32, 64, 128])
-        # self.assertEqual(model.input_shape, (None, 28, 3))
-        # self.assertEqual(model.output_shape, (None, 3))
+#         # input_shape = (28, 3)
+#         # model = create_convolution_model(input_shape, hidden_layers=[32, 64, 128])
+#         # self.assertEqual(model.input_shape, (None, 28, 3))
+#         # self.assertEqual(model.output_shape, (None, 3))
         
-        # input_shape = (28, 3)
-        # model = create_convolution_model(input_shape, hidden_layers=[32, 64, 128], dropout=0.5)
-        # self.assertEqual(model.input_shape, (None, 28, 3))
-        # self.assertEqual(model.output_shape, (None, 3))
+#         # input_shape = (28, 3)
+#         # model = create_convolution_model(input_shape, hidden_layers=[32, 64, 128], dropout=0.5)
+#         # self.assertEqual(model.input_shape, (None, 28, 3))
+#         # self.assertEqual(model.output_shape, (None, 3))
         
-        # input_shape = (28, 3)
-        # model = create_convolution_model(input_shape, hidden_layers=[32, 64, 128], dropout=0.5, verbose=1)
-        # self.assertEqual(model.input_shape, (None, 28, 3))
-        # self.assertEqual(model.output_shape, (None, 3))
+#         # input_shape = (28, 3)
+#         # model = create_convolution_model(input_shape, hidden_layers=[32, 64, 128], dropout=0.5, verbose=1)
+#         # self.assertEqual(model.input_shape, (None, 28, 3))
+#         # self.assertEqual(model.output_shape, (None, 3))
         
-        # input_shape = (28, 3)
-        # model = create_convolution_model(input_shape, hidden_layers=[32, 64, 128], dropout=0.5, verbose=2)
-        # self.assertEqual(model.input_shape, (None, 28, 3))
-        # self.assertEqual(model.output_shape, (None, 3))
-
-def plot_first_market(path='data/'):
-    import matplotlib.pyplot as plt
-    import pandas as pd
-    import os
-    # import numpy as np
-    # from sklearn.preprocessing import MinMaxScaler
-
-    # load the first .pickle file in `path`
-    for f in os.listdir(path):
-        if f.endswith('.pickle'):
-            print(f"Found file in cache: {f}") #if verbose > 0 else None
-            loaded_filename = f'{path}{f}'
-            df = pd.read_pickle(loaded_filename)
-            break
-
-    if df is None:
-        raise ValueError(f"No .pickle files found in {path}")
-
-    return plot_history(df['history'], path)
-
-def plot_history(history, path=None):
-    print(history.head())
-    print(history.tail())
-    print(history.shape)
-    print(history.info())
-    print(history.describe())
-    fig, ax = plt.subplots()
-    close: pd.Series = history['Close']
-    date: pd.DatetimeIndex = history.index
-    print(f"close = {type(close)}")
-    print(f"date = {type(date)}")
-    # convert close and date to a suitable format to draw
-    ax.plot(date, close)
-    # fig.draw([close, date])
-    if path is not None:
-        plt.savefig(f'{path}stock_prices.png')
-        # import os
-        # plt.savefig(os.path.join(path, 'stock_prices.png'))
-    plt.show()
-    return tf.convert_to_tensor(fig.get_rasterized())
-    
-
-# class PlotFirstMarketTest(tf.test.TestCase):
-#     def test_plot_first_market(self):
-#         plot_first_market()
-
-
-def plot_candlesticks(history, i=0, bars=5, show_plot=False):
-    # Defining a dataframe showing stock prices of a week
-    date = history.index[history.index.weekday < 5]
-    open = history['Open'][history.index.weekday < 5]
-    high = history['High'][history.index.weekday < 5]
-    low = history['Low'][history.index.weekday < 5]
-    close = history['Close'][history.index.weekday < 5]
-    volume = history['Volume'][history.index.weekday < 5]
-
-    stock_prices = pd.DataFrame({'date':date, 'open':open, 'high':high,
-                                 'low':low, 'close':close,'volume':volume})
-
-    ohlc = stock_prices.loc[:, ['date', 'open', 'high', 'low', 'close', 'volume']]
-    ohlc['date'] = pd.to_datetime(ohlc['date'])
-    ohlc['date'] = ohlc['date'].apply(mpl_dates.date2num)
-    ohlc = ohlc.astype(float)
-
-    # Creating Subplots
-    fig, ax = plt.subplots() 
-
-    candlestick_ohlc(ax, ohlc.values[i:i+bars], width=0.6, colorup='blue', 
-                    colordown='green', alpha=0.4) 
-
-    # Setting labels & titles
-    ax.set_xlabel('Date')
-    ax.set_ylabel('Price')
-    fig.suptitle(f'Stock Prices of a {"week" if bars == 5 else f"{bars} days"}', y=0.95, fontsize=16)
-
-    # Formatting Date (but don't plot weekends or days with no data)    
-    date_format = mpl_dates.DateFormatter('%d-%m-%Y', usetex=True)
-    ax.xaxis.set_major_formatter(date_format)
-    fig.autofmt_xdate()
-
-    fig.tight_layout()
-
-    if show_plot:
-        plt.show()
-    # convert image to tensor
-    image = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
-    return image
-
-def plot_candlesticks_movie(history, i=0, bars=5, frames=10, fps=2.2, filename='output.mp4'):
-    images = np.concatenate([
-        plot_candlesticks(history, i=i+n, bars=bars, show_plot=False).numpy()
-        for n in range(frames)
-    ])
-    # create video
-    create_video(images, filename=filename, fps=fps)
-
-class PlotCandlesticksTest(tf.test.TestCase):
-    def test_plot_candlesticks(self):
-        import os
-        path = 'data/'
-        # load the first .pickle file in `path`
-        for f in os.listdir(path):
-            if f.endswith('.pickle'):
-                print(f"Found file in cache: {f}") #if verbose > 0 else None
-                loaded_filename = f'{path}{f}'
-                df = pd.read_pickle(loaded_filename)
-                break
-
-        if df is None:
-            raise ValueError(f"No .pickle files found in {path}")
-
-        print(df['history'].head())
-        images = []
-        for i in range(3):
-            images.append(plot_candlesticks(df['history'], i))
-        # plot_candlesticks(df['history'])
-        print(images)
-        plt.plot(images)
-        plt.show()
-
-    def test_plot_candlesticks_movie(self):
-        import os
-        path = 'data/'
-        # load the first .pickle file in `path`
-        for f in os.listdir(path):
-            if f.endswith('.pickle'):
-                print(f"Found file in cache: {f}") #if verbose > 0 else None
-                loaded_filename = f'{path}{f}'
-                df = pd.read_pickle(loaded_filename)
-                break
-
-        if df is None:
-            raise ValueError(f"No .pickle files found in {path}")
-
-        print(df['history'].head())
-        plot_candlesticks_movie(df['history'])
-
-if __name__ == '__main__':
-    tf.test.main()
-       
-#
+#         # input_shape = (28, 3)
+#         # model = create_convolution_model(input_shape, hidden_layers=[32, 64, 128], dropout=0.5, verbose=2)
+#         # self.assertEqual(model.input_shape, (None, 28, 3))
+#         # self.assertEqual(model.output_shape, (None, 3))

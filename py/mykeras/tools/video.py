@@ -19,6 +19,18 @@ import matplotlib.pyplot as plt
 #     out.release()
 
 def create_video(frames, filename='output.mp4', fps=30):
+    if isinstance(frames, pd.DataFrame):
+        frames = frames.values
+    elif isinstance(frames, list):
+        frames = np.array(frames)
+    elif isinstance(frames, np.ndarray):
+        pass
+    elif isinstance(frames, str):
+        frames = pd.read_csv(frames).values
+    elif isinstance(frames, tf.Tensor):
+        frames = frames.numpy()
+    else:
+        raise ValueError(f"frames type {type(frames)} not supported")
     height, width, channels = frames[0].shape
     print(f"Creating video {width}x{height}x{channels} {filename}")
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
