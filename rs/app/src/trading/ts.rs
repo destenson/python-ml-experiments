@@ -1,6 +1,5 @@
 
-pub 
-trait TimeSeriesModel: std::ops::Add<Output = impl Self> + std::ops::Mul<f64, Output = impl Self> + std::ops::Sub<Output = impl Self> + std::ops::Div<f64, Output = impl Self> + std::ops::Mul<impl TimeSeriesModel, Output = impl TimeSeriesModel> + std::ops::Add<impl TimeSeriesModel, Output = impl TimeSeriesModel> + std::ops::Sub<impl TimeSeriesModel, Output = impl TimeSeriesModel> + std::ops::Div<impl TimeSeriesModel, Output = impl TimeSeriesModel> + std::ops::Mul<f64, Output = impl TimeSeriesModel> + std::ops::Div<f64, Output = impl TimeSeriesModel> + std::marker::Copy + std::marker::Sized {
+pub trait TimeSeriesModel {
     fn fit(&mut self, x: Vec<f64>, y: Vec<f64>);
 }
 
