@@ -18,26 +18,45 @@ import matplotlib.pyplot as plt
 #         # out.write(cv2.getOptimalNewCameraMatrix(frame, (1., 1.), (height,width), 1.0, newImgSize=(height,width)))
 #     out.release()
 
+
+
 def create_video(frames, filename='output.mp4', fps=30):
-    if isinstance(frames, pd.DataFrame):
-        frames = frames.values
-    elif isinstance(frames, list):
-        frames = np.array(frames)
-    elif isinstance(frames, np.ndarray):
-        pass
-    elif isinstance(frames, str):
-        frames = pd.read_csv(frames).values
-    elif isinstance(frames, tf.Tensor):
-        frames = frames.numpy()
+    print(f"Creating video {filename} from frames of type {type(frames)}.")
+    if True:
+        height, width, channels = frames[0].shape
+        print(f"Creating video {width}x{height}x{channels} {filename}")
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(filename, fourcc, fps, (width, height))
+        for frame in frames:
+            out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+        out.release()
     else:
-        raise ValueError(f"frames type {type(frames)} not supported")
-    height, width, channels = frames[0].shape
-    print(f"Creating video {width}x{height}x{channels} {filename}")
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(filename, fourcc, fps, (width, height))
-    for frame in frames:
-        out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
-    out.release()
+        if isinstance(frames, pd.DataFrame):
+            frames = frames.values
+        elif isinstance(frames, list):
+            frames = np.array(frames)
+        elif isinstance(frames, np.ndarray):
+            pass
+        # elif isinstance(frames, dict):
+        #     print(f"frames.keys() = {frames.keys()}")
+        #     pass
+        elif isinstance(frames, str):
+            frames = pd.read_csv(frames).values
+        elif isinstance(frames, tf.Tensor):
+            frames = frames.numpy()
+        else:
+            raise ValueError(f"frames type {type(frames)} not supported")
+        print(f"frames.shape = {frames.shape}")
+        width, height, channels = frames[0].shape
+        print(f"Creating video {width}x{height}x{channels} {filename}")
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(filename, cv2.CAP_FFMPEG, fourcc, fps, (width, height))
+        for frame in frames:
+            print(f"Creating frame: frame.shape = {frame.shape}")
+            # plt.imshow(frame)
+            out.write(cv2.cvtColor(frame[:,:,:3], cv2.COLOR_RGB2BGR))
+            # out.write(frame) # why doesn't this do anything? It's just an empty video.
+        out.release()
     
 def read_video(filename):
     cap = cv2.VideoCapture(filename)
@@ -55,7 +74,9 @@ class VideoTesting(tf.test.TestCase):
     
     def test_make_video(self):
         frames = [
-            np.random.randint(0, 255, (480, 720, 3), dtype=np.uint8) for _ in range(10)]
+            np.random.randint(0, 255, (480, 720, 3), dtype=np.uint8)
+            for _ in range(10)
+        ]
         print(f"frames len = {len(frames)}")
         print(f"frames[0].shape = {frames[0].shape}")
         # plt.plot(frames)
@@ -65,7 +86,8 @@ class VideoTesting(tf.test.TestCase):
             read_video('output.mp4')).reshape(-1, 480, 720, 3)
         print(f"frames2 len = {len(frames2)}")
         print(f"frames2[0].shape = {frames2[0].shape}")
-        loss = tf.keras.losses.MeanSquaredError()(np.array(frames), frames2) / 480 / 720 / 3 / len(frames)
+        loss = tf.keras.losses.MeanSquaredError()(
+            np.array(frames), frames2) / 480 / 720 / 3 / len(frames)
         print(f"loss per channel = {float(loss)}")
         self.assertLess(loss, 1e-3)
         # plt.plot(frames2[0][0])
