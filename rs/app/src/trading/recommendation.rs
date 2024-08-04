@@ -1,4 +1,6 @@
 
+use serde::{Serialize, Deserialize};
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 enum Order {
     Market { price: Option<f64>, size: f64 },
@@ -15,7 +17,7 @@ pub struct PositionSize {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-enum Positions {
+enum Position {
     Long(PositionSize),
     Short(PositionSize),
     Flat(PositionSize),

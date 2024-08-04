@@ -1,7 +1,38 @@
 [package]
-name = "app"
+name = "kan-app"
 version = "0.1.0"
 edition = "2021"
 description = "kan is a neural network visualizer"
 
 [dependencies]
+aligned-vec = {version="0.6", features=["serde"]}
+bytemuck = {version="1", features=["derive"]}
+clap = {version="4", features = ["derive", "string"]}
+dotenv = "0.15.0"
+dyn-stack = "0.10"
+equator = "0.3"
+faer = "0.19"
+half = {version="2", features = [
+    "bytemuck","num-traits","rand_distr", "rkyv",
+    "serde", "use-intrinsics", "zerocopy"]}
+image = {version="0.25", features=["color_quant"]}
+itertools = "0.13"
+pulp = {version="0.18", features = ["macro"]}
+rand = {version="0.8", features= ["log", "serde"]}
+rayon = "1"
+ndarray = "0.15"
+ndarray-rand = "0.14"
+reborrow = {version="0.5", features=["derive"]}
+safetensors = "0.4"
+serde = {version="1", features=["derive", "alloc", "rc", "serde_derive"]}
+serde-pickle = "1.1.1"
+tensorflow = "0.21.0"
+
+[dev-dependencies]
+diol = "0.8"
+estra = "0.8.5"
+eyre = {version = "0.6", features=["pyo3"]}
+
+num-traits = "0.2.14"
+num-complex = "0.4"
+protobuf = "3"
