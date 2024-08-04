@@ -64,10 +64,20 @@ def update_dataset(original, new):
     return new
 
 def get_ticker_data(ticker_symbol,
-                    start="2023-01-01", end=date.today()-dt.timedelta(days=1),
+                    start="2023-01-01", end=date.today(),#-dt.timedelta(days=1),
                     period="max",
+                    interval='1d',
                     cache_dir='data/',
                     verbose=False):
+
+    assert interval == '1d', f"Only daily interval is currently supported, got '{interval}'"
+    # end is a weekend day, move it to the previous Friday
+    if isinstance(end, str) and dt.datetime.strptime(end, '%Y-%m-%d').weekday() > 4 or isinstance(end, dt.datetime) and end.weekday() > 4:
+        # Create an offset of 5 Business days (this is kind of fucking dumb)
+        bd = pd.tseries.offsets.BusinessDay(n = 5, normalize=True)
+        print(f"end was {end}")
+        end = bd.rollback(end).strftime('%Y-%m-%d')
+        print(f"end is now {end}")
     if isinstance(cache_dir, str):
         cache_filename = f"{cache_dir}{ticker_symbol}_{start}_{end}.pickle"
         try:
@@ -120,16 +130,23 @@ def get_ticker_data(ticker_symbol,
                             print(f"Columns: {history.columns}") if verbose < 2 else None
                             raise ValueError(f"Invalid history, expected Date in columns: {history.columns}")
                         else:
+                            start_orig = start
+                            if start_orig == '2023-01-01':
+                                print("Start date is 2023-01-01") #if verbose > 0 else None
                             start = pd.to_datetime(start).tz_localize('EST', ambiguous='raise')
                             end = pd.to_datetime(end).tz_localize('EST', ambiguous='raise')
-                            if start.weekday() > 4:
-                                start = start + pd.DateOffset(days=8-start.weekday())
-                            if end.weekday() > 4:
-                                end = end + pd.DateOffset(days=8-end.weekday())
+                            # Create an offset of 5 Business days (this is kind of fucking dumb, especially since it doesn't work right)
+                            bd = pd.tseries.offsets.BusinessDay(n = 5)
+                            start = bd.rollforward(start)
+                            end = bd.rollback(end)
+                            if start == pd.to_datetime("2023-01-02"):
+                                raise ValueError("that's a fucking weekend dumbass")
                             print(f"{history.head()} .. {history.tail()}") if verbose > 1 else None
                             if len(history) == 0:
+                                start = start.strftime('%Y-%m-%d')
+                                end = end.strftime('%Y-%m-%d')
                                 print(f"Empty history for {ticker_symbol}") if verbose > 0 else None
-                                return get_ticker_data(ticker_symbol, start=start, end=end, cache_dir=None)
+                                return get_ticker_data(ticker_symbol, start=start, end=end, cache_dir=None)[()]
                             date_min = history.index.min()
                             date_max = history.index.max()
                             print(f"Date range: {date_min} to {date_max}") if verbose > 0 else None
@@ -143,6 +160,7 @@ def get_ticker_data(ticker_symbol,
                             
                             # check if the dataset has data for the start date
                             if date_min <= start:
+                                end = end.strftime('%Y-%m-%d')
                                 print(f"Found cached data for {ticker_symbol} from after start {
                                     date_min} to {date_max}") if verbose > 0 else None
                                 print(f"Getting data for {ticker_symbol} from {
@@ -161,6 +179,7 @@ def get_ticker_data(ticker_symbol,
 
                             # check if the dataset has data for the end date
                             if date_max >= end:
+                                start = start.strftime('%Y-%m-%d')
                                 print(f"Found cached data for {ticker_symbol} from after end {
                                     date_min} to {date_max}") if verbose > 0 else None
                                 print(f"Getting data for {ticker_symbol} from {
@@ -177,12 +196,16 @@ def get_ticker_data(ticker_symbol,
                                 return dataset
                             
                             if start < date_min and end > date_max:
+                                start = start.strftime('%Y-%m-%d')
+                                end = end.strftime('%Y-%m-%d')
                                 print(f"Found cached data for {ticker_symbol} from after start to before end {
                                     date_min} to {date_max}") if verbose > 0 else None
-                                print(f"Getting data for {ticker_symbol} from {
-                                    date_min} to {date_max}") if verbose > 0 else None
-                                dataset = get_ticker_data(
-                                    ticker_symbol, start=date_min, end=date_max, cache_dir=None)[()]
+                                # print(f"Getting data for {ticker_symbol} from {
+                                #     date_min} to {date_max}") if verbose > 0 else None
+                                dataset = update_dataset(
+                                    get_ticker_data(ticker_symbol, start=start, end=date_min, cache_dir=None)[()], dataset)
+                                dataset = update_dataset(dataset, get_ticker_data(
+                                    ticker_symbol, start=date_max, end=end, cache_dir=None)[()])
                                 with open(cache_filename, 'wb') as f:
                                     pd.to_pickle(dataset, f)
                                 if loaded_filename is not cache_filename:
