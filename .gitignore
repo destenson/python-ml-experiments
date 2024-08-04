@@ -9,6 +9,9 @@
 *.log
 *.mp4
 
+**/target/
+**/target.vscode/
+
 data/yfinance.cache
 autoencoder-2dim/
 cgan_mnist/
