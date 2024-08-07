@@ -4,15 +4,19 @@ import tensorflow as tf
 import keras
 from keras.api.models import Sequential
 from keras.api.layers import LSTM, Dense, Input, Reshape, Flatten, BatchNormalization
-from py.mykeras.datasets.yf import get_ticker_data
+from py.mykeras.datasets.yf.yf import yahoofinance_data
 from py.mykeras.tools.markets.data import get_dataset
 import pandas as pd
 
 def get_preprocessed_data(symbol='AAPL', window_size=20, step_size=1):
-    data = get_ticker_data(symbol, start='1970-01-01', verbose=True)
+    data = yahoofinance_data(symbol, verbose=True)[()]
+    
+    print(f"Data: {len(data)}")
+    # print(data)
     
     # examine data
-    print(data.keys())
+    if isinstance(data, dict):
+        print(data.keys())
     print(data['data'].keys())
     print(data['history'].keys())
     print(data['history'].head())
@@ -53,6 +57,28 @@ def get_preprocessed_data(symbol='AAPL', window_size=20, step_size=1):
 
     return data, windowed_data
 
+def desplit_prices(data):
+    def unadjust_price(adjusted_price, price_date, splits):
+        unadjusted_price = adjusted_price
+        for _, split in splits.iterrows():
+            if split['date'] > price_date:
+                unadjusted_price *= split['ratio']
+        return unadjusted_price
+
+    data = data['history']
+    # data = data.drop(columns=['Dividends', 'Stock Splits', 'Volume'])
+    # use the stock splits to adjust the prices
+    # for i in range(len(data['splits'])):
+    #     split = data['splits'].iloc[i]
+    #     date = data['splits'].index[i]
+    #     data['Close'] = data['Close'].apply(lambda x: x/split if x > split else x)
+    #     data['Open'] = data['Open'].apply(lambda x: x/split if x > split else x)
+    #     data['High'] = data['High'].apply(lambda x: x/split if x > split else x)
+    #     data['Low'] = data['Low'].apply(lambda x: x/split if x > split else x)
+        
+    data = data[['Close', 'Volume']]
+    return data
+
 def learn_aapl():
     _data, data = get_preprocessed_data('AAPL')
     data = data[()]
@@ -84,7 +110,7 @@ def learn_aapl():
 
     n = 0
     # Training loop
-    for epoch in range(100):
+    for epoch in range(10):
         for d in data.as_numpy_iterator():
             # print(f"d: {d}")
             X = d[:-1]

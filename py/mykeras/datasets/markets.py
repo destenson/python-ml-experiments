@@ -24,7 +24,7 @@ def get_all_data(data_path='data/'):
 def get_data(symbol, start_date, end_date, features=['Close', 'Volume'], period='1d', source=None):
     data = None
     if source is None or source == 'yf':
-        from py.mykeras.datasets.yf import get_ticker_data
+        from py.mykeras.datasets.yf.yf import get_ticker_data
         data = get_ticker_data(symbol, start=start_date, end=end_date, interval=period)
 
 

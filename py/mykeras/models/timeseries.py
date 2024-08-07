@@ -124,7 +124,7 @@ class TimeSeriesTesting(tf.test.TestCase):
     #     test_models()
         
     def test_yf_aapl(self):
-        from ..datasets.yf import get_ticker_data
+        from ..datasets.yf.yf import get_ticker_data
         data = get_ticker_data('AAPL', verbose=1)
         
         pd.read_pickle

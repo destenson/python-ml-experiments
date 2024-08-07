@@ -13,8 +13,6 @@ from requests_cache import CacheMixin, SQLiteCache
 from requests_ratelimiter import LimiterMixin, MemoryQueueBucket
 from pyrate_limiter import Duration, RequestRate, Limiter
 
-import pickle
-
 # import requests_cache
 
 class CachedLimiterSession(CacheMixin, LimiterMixin, Session):
@@ -27,64 +25,197 @@ session = CachedLimiterSession(
 )
 
 # load data
-def yahoofinance_data(symbol, start='2023-01-01', end='2024-01-01', verbose=False):
-    dataset = get_ticker_data(symbol, start=start, end=end)
+def yahoofinance_data(symbol, start=None, end=None, verbose=False):
+    dataset = get_ticker_data(symbol, start=start, end=end, verbose=verbose)
     
-    if verbose:
-        print(f"dataset: {dataset}")
+    print(f"dataset: {dataset}") if verbose > 1 else None
     
     return dataset
 
-def get_tickers(symbols, start='2023-01-01', end='2024-01-01', verbose=False):
+def get_tickers(symbols, start=None, end=None, verbose=False):
     datasets = []
     for symbol in symbols:
-        dataset = get_ticker_data(symbol, start=start, end=end)
+        dataset = get_ticker_data(symbol, start=start, end=end, verbose=verbose)
         datasets.append(dataset)
         print(f"dataset: {dataset}") if verbose > 0 else None
     return np.array(datasets)
 
-def update_dataset(original, new):
+def update_dataset(original, new, verbose=1):
     if original is None:
+        print("original is None") if verbose > 1 else None
         return new
     if new is None:
+        print("new is None") if verbose > 1 else None
         return original
     if isinstance(original, dict) and isinstance(new, dict):
-        for k in new.keys():
-            if k in original.keys():
-                original[k] = update_dataset(original[k], new[k])
-            else:
-                original[k] = new[k]
-        return original
+        print("Both are dict types") if verbose > 0 else None
+        if new.keys() == original.keys():
+            print("Same keys") if verbose > 0 else None
+            for k in new.keys():
+                if type(original[k]) == type(new[k]):
+                    original[k] = update_dataset(original[k], new[k], verbose=verbose)
+                else:
+                    print(f"Different types for {k}: {type(original[k])} and {type(new[k])}") if verbose > 1 else None
+                    raise ValueError(f"Different types for {k}: {type(original[k])} and {type(new[k])}")
+            return original
+        else:
+            print("Different keys") if verbose > 0 else None
+            print(f"New keys: {new.keys()}") if verbose > 0 else None
+            print(f"Original keys: {original.keys()}") if verbose > 0 else None
+            for k in new.keys():
+                if k in original.keys() and not isinstance(original[k], str):
+                    if type(original[k]) == type(new[k]):
+                        original[k] = update_dataset(original[k], new[k], verbose=verbose)
+                    else:
+                        print(f"Different types for {k}: {type(original[k])} and {type(new[k])}") if verbose > 1 else None
+                        raise ValueError(f"Different types for {k}: {type(original[k])} and {type(new[k])}")
+                else:
+                    if type(original[k]) == type(new[k]):
+                        print(f"Updating {k} from {original[k]} to {new[k]}") if verbose > 1 else None
+                        original[k] = new[k]
+                    else:
+                        raise ValueError(f"Invalid types for {k}: {type(original[k])} and {type(new[k])}")
+                        # print(f"Invalid types: {type(original[k])} and {type(new[k])}") if verbose > 1 else None
+            return original
     if isinstance(original, pd.DataFrame) and isinstance(new, pd.DataFrame):
+        print("Both are DataFrame types") if verbose > 1 else None
+        print(f"{original.head()} .. {original.tail()}") if verbose > 1 else None
+        print(f"{new.head()} .. {new.tail()}") if verbose > 1 else None
+        if len(original) == 0:
+            print("Empty original") if verbose > 0 else None
+            return new
+        if len(new) == 0:
+            print("Empty new") if verbose > 0 else None
+            return original
+        print("concat'ing DataFrames") if verbose > 1 else None
         return pd.concat([original, new])
     if isinstance(original, list) and isinstance(new, list):
+        print("Both are list types") if verbose > 0 else None
+        
         return original + new
     if isinstance(original, np.ndarray) and isinstance(new, np.ndarray):
+        print("Both are ndarray types") if verbose > 0 else None
         return np.concatenate([original, new])
-    return new
+    if type(original) == type(new):
+        print(f"Both are same type: {type(original)}") if verbose > 1 else None
+        return new
+    raise ValueError(f"Invalid types: {type(original)} and {type(new)}")
+    # print("Returning new") if verbose > 0 else None
+    # return new
+
+def get_last_business_day(date):
+    if isinstance(date, str):
+        date = pd.to_datetime(date)
+    if date.weekday() > 4:
+        # Create an offset of 5 Business days
+        bd = pd.tseries.offsets.BusinessDay(n = 5)
+        date = bd.rollback(date)
+
+    return date.strftime('%Y-%m-%d')        
+
+def get_ipo_date(ticker_symbol, dataset=None):
+    if dataset is not None:
+        if isinstance(dataset, dict):
+            if 'info' in dataset.keys():
+                info = dataset['info']
+                ipo_date = info['firstTradeDateEpochUtc']
+            else:
+                info = Ticker(ticker_symbol, session=session).info
+                ipo_date = info['firstTradeDateEpochUtc']
+                dataset = update_dataset(dataset, {'info': info})
+                # raise ValueError(f"Invalid dataset, expected 'info' in keys: {dataset.keys()}")
+        elif isinstance(dataset, np.ndarray):
+            assert dataset.size == 1, f"Expected dataset to have size 1, got {dataset.size}"
+            # print(f"dataset.item(1): {dataset.item(1)}") #if verbose > 0 else None
+            if 'info' in dataset.item(0).keys():
+                info = dataset.item(0)['info']
+                ipo_date = info['firstTradeDateEpochUtc']
+            else:
+                info = Ticker(ticker_symbol, session=session).info
+                try:
+                    ipo_date = info['firstTradeDateEpochUtc']
+                    dataset = update_dataset(dataset, {'info': info})
+                except Exception as e:
+                    print(f"caught exception: {e}")
+                    ipo_date = -1
+        else:
+            raise ValueError(f"Invalid dataset type: {type(dataset)}")
+    else:
+        info = Ticker(ticker_symbol, session=session).info
+        ipo_date = info['firstTradeDateEpochUtc']
+    # print(f"{ticker_symbol} IPO date: ({ipo_date})") #if verbose > 0 else None
+    if ipo_date < 0:
+        ipo_date = dt.datetime.fromtimestamp(0, dt.UTC) - (dt.datetime.fromtimestamp(-ipo_date, dt.UTC) - dt.datetime.fromtimestamp(0, dt.UTC))
+    else:
+        ipo_date = dt.datetime.fromtimestamp(ipo_date, dt.UTC)
+    # print(f"{ticker_symbol} IPO date: {ipo_date.date()} ({ipo_date})") #if verbose > 0 else None
+    return ipo_date, info, dataset
+
+
+def update_stock_info(data):
+    if isinstance(data, dict):
+        if 'info' not in data.keys():
+            info = Ticker(data['symbol'], session=session).info
+            info = update_dataset(info, {'retrieval_date': pd.to_datetime(date.today()).date()})
+            data = update_dataset(data, {'info': info})
+        else:
+            if data['info']['retrieval_date'] < pd.to_datetime(date.today()).date()-pd.tseries.offsets.Day(7):
+                info = Ticker(data['symbol'], session=session).info
+                info = update_dataset(info, {'retrieval_date': pd.to_datetime(date.today()).date()})
+                data = update_dataset(data, {'info': info})
+            else:
+                print("info already in data") #if verbose > 0 else None
+    else:
+        print(f"Invalid data type: {type(data)}")
+    return data
 
 def get_ticker_data(ticker_symbol,
-                    start="2023-01-01", end=date.today(),#-dt.timedelta(days=1),
+                    start=None, end=date.today().strftime('%Y-%m-%d'),#-dt.timedelta(days=1),
                     period="max",
                     interval='1d',
                     cache_dir='data/',
-                    verbose=False):
+                    verbose=1):
+    dataset = None
+    if start is None:
+        if cache_dir is None:
+            raise ValueError("start date is required when cache_dir is None")
+        import os
+        for f in os.listdir(cache_dir):
+            if f.startswith(f'{ticker_symbol}_') and f.endswith('.pickle'):
+                print(f"Found file in cache: {f}") if verbose > 0 else None
+                loaded_filename = f'{cache_dir}{f}'
+                dataset = pd.read_pickle(loaded_filename)
+                break
+        start, info, _ds = get_ipo_date(ticker_symbol, dataset)
+    if end is None:
+        end = date.today()
 
     assert interval == '1d', f"Only daily interval is currently supported, got '{interval}'"
+    start = pd.to_datetime(start).date()
+    end = pd.to_datetime(end).date()
     # end is a weekend day, move it to the previous Friday
-    if isinstance(end, str) and dt.datetime.strptime(end, '%Y-%m-%d').weekday() > 4 or isinstance(end, dt.datetime) and end.weekday() > 4:
+    if end.weekday() > 4:
         # Create an offset of 5 Business days (this is kind of fucking dumb)
         bd = pd.tseries.offsets.BusinessDay(n = 5, normalize=True)
-        print(f"end was {end}")
-        end = bd.rollback(end).strftime('%Y-%m-%d')
-        print(f"end is now {end}")
+        print(f"end was {end}") if verbose > 1 else None
+        if end == date.today():
+            print("End date is today") if verbose > 1 else None
+            end = (bd.rollback(end) - pd.tseries.offsets.Day(1)).date()
+        else:
+            end = (bd.rollback(end) - pd.tseries.offsets.Day(1)).date()
+        print(f"end is now {end}") if verbose > 1 else None
+        if start >= end:
+            print(f"start {start} >= end {end}")
+            return np.array({})
     if isinstance(cache_dir, str):
         cache_filename = f"{cache_dir}{ticker_symbol}_{start}_{end}.pickle"
         try:
             import os
             if cache_filename and os.path.isfile(cache_filename):
                 print(f"Loading data from cache: {cache_filename}") if verbose > 0 else None
-                return pd.read_pickle(cache_filename)
+                dataset = pd.read_pickle(cache_filename)
+                # TODO: ensure the dataset contains the requried dates
+                return dataset
         except Exception as e:
             print(f"caught exception: {e}")
 
@@ -98,7 +229,7 @@ def get_ticker_data(ticker_symbol,
                 dataset = pd.read_pickle(loaded_filename)
                 break
 
-        if 'dataset' in locals():
+        if 'dataset' in locals() and dataset is not None:
             if not isinstance(dataset, dict) and dataset.shape == ():
                 dataset = dataset[()]
             # print(f"dataset type: {type(dataset)}") #if verbose > 0 else None
@@ -133,15 +264,18 @@ def get_ticker_data(ticker_symbol,
                             start_orig = start
                             if start_orig == '2023-01-01':
                                 print("Start date is 2023-01-01") #if verbose > 0 else None
+                            if end == date.today():
+                                print("End date is today") #if verbose > 0 else None
                             start = pd.to_datetime(start).tz_localize('EST', ambiguous='raise')
                             end = pd.to_datetime(end).tz_localize('EST', ambiguous='raise')
                             # Create an offset of 5 Business days (this is kind of fucking dumb, especially since it doesn't work right)
                             bd = pd.tseries.offsets.BusinessDay(n = 5)
                             start = bd.rollforward(start)
-                            end = bd.rollback(end)
-                            if start == pd.to_datetime("2023-01-02"):
-                                raise ValueError("that's a fucking weekend dumbass")
-                            print(f"{history.head()} .. {history.tail()}") if verbose > 1 else None
+                            if end == date.today():
+                                print("End date is today") #if verbose > 0 else None
+                                end = bd.rollback(end) - pd.tseries.offsets.DateOffset(days=1)
+                            if start_orig == '2023-01-01':
+                                start = start + pd.tseries.offsets.Day(1)
                             if len(history) == 0:
                                 start = start.strftime('%Y-%m-%d')
                                 end = end.strftime('%Y-%m-%d')
@@ -213,17 +347,25 @@ def get_ticker_data(ticker_symbol,
                                     os.remove(loaded_filename)
                                 return dataset
 
-    if 'dataset' in locals():
+    if 'dataset' in locals() and dataset is not None:
         raise ValueError(f"We should've returned by now")
 
-    print(f"Getting ticker data for {ticker_symbol}")
+    print(f"Getting ticker data for {ticker_symbol} (cache_dir={cache_dir})") if verbose > 0 else None
     # create Ticker object    
     # symbol = Ticker(ticker_symbol)
     symbol = Ticker(ticker_symbol, session=session)
 
     # # get all stock info
     # symbol.info
+    
+    # make sure start and end are str
+    start = start.strftime('%Y-%m-%d') if isinstance(start, dt.datetime) else start
+    end = end.strftime('%Y-%m-%d') if isinstance(end, dt.datetime) else end
 
+    print(f"Getting history from {start} to {end}") if verbose > 0 else None
+    if start == end:
+        print(f"Start date {start} is the same as end date {end}") if verbose > 0 else None
+        return np.array({})
     # get historical market data
     hist = symbol.history(period=period, start=start, end=end)
 
@@ -375,6 +517,7 @@ def get_ticker_data(ticker_symbol,
 
     result = np.array({
         'symbol': ticker_symbol,
+        'info': symbol.info,
         'data': {
             'actions': symbol.get_actions(),
             'analyst_price_target': analyst_price_target,
@@ -510,7 +653,7 @@ def list_markets(verbose=False):
     data = []
     for s in stock_symbols:
         # try:
-        data.append(get_ticker_data(s, verbose=verbose))
+        data.append(yahoofinance_data(s, verbose=verbose))
         # except Exception as e:
         #     print(f"caught exception: {e}")
     return data
