@@ -69,6 +69,9 @@ def read_video(filename):
     cap.release()
     return frames
 
+def image_similarity(image1, image2):
+    return tf.math.reduce_mean(tf.math.square(image1 - image2))
+
 
 class VideoTesting(tf.test.TestCase):
     
@@ -92,6 +95,12 @@ class VideoTesting(tf.test.TestCase):
         self.assertLess(loss, 1e-3)
         # plt.plot(frames2[0][0])
         
+    def test_image_similarity(self):
+        image1 = np.random.randint(0, 255, (480, 720, 3), dtype=np.uint8)
+        image2 = np.random.randint(0, 255, (480, 720, 3), dtype=np.uint8)
+        loss = image_similarity(image1, image2)
+        print(f"loss = {loss}")
+        self.assertLess(loss, 1e-3)
 
     
 if __name__ == '__main__':
