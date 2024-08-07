@@ -2,6 +2,7 @@
 finplot==1.9.5
 jax==0.4.30
 matplotlib
+onnxruntime==1.18.1
 pandas
 pandas_datareader==0.10.0
 plotly==5.22
